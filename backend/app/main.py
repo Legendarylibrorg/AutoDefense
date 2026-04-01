@@ -68,15 +68,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if request.scope.get("type") == "websocket":
-            # Accept query param OR Sec-WebSocket-Protocol header for auth
-            token = request.query_params.get("token", "")
-            if not token:
-                protocols = request.headers.get("sec-websocket-protocol", "")
-                for proto in protocols.split(","):
-                    p = proto.strip()
-                    if p.startswith("auth."):
-                        token = p.removeprefix("auth.")
-                        break
+            token = ""
+            protocols = request.headers.get("sec-websocket-protocol", "")
+            for proto in protocols.split(","):
+                p = proto.strip()
+                if p.startswith("auth."):
+                    token = p.removeprefix("auth.")
+                    break
         else:
             auth = request.headers.get("Authorization", "")
             token = auth.removeprefix("Bearer ").strip()

@@ -15,6 +15,7 @@ from app.core.config_store import ConfigStore
 from app.core.event_bus import EventBus
 from app.core.models import AnalyzeRequest, AnalyzeResponse, Event
 from app.core.response_engine import ResponseEngine
+from app.core.rules_store import RulesStore
 from app.core.self_heal import SelfHealingEngine
 
 logger = logging.getLogger("autodefense.pipeline")
@@ -60,8 +61,10 @@ class DefensePipeline:
             )
         )
 
+        dynamic_rules = await RulesStore(self.redis).load()
+
         artifact = await self.artifact.analyze(req.artifacts)
-        sentinel = await self.sentinel.analyze(req)
+        sentinel = await self.sentinel.analyze(req, dynamic=dynamic_rules)
         policy = await self.policy.analyze(
             req,
             sentinel_sanitized_input=sentinel["sanitized_input"],

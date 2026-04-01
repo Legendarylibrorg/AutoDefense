@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 from dataclasses import dataclass
@@ -11,6 +12,44 @@ from redis.asyncio import Redis
 
 from app.core.crypto import CryptoManager
 from app.settings import settings
+
+logger = logging.getLogger("autodefense.config_store")
+
+
+def _is_safe_regex(pattern: str) -> bool:
+    """Quick check: compilable, no nested quantifiers, doesn't hang on probe."""
+    if not isinstance(pattern, str) or len(pattern) > 300:
+        return False
+    try:
+        compiled = re.compile(pattern)
+    except re.error:
+        return False
+    if re.search(r"\([^)]*[+*][^)]*\)[+*]", compiled.pattern):
+        return False
+    result = [True]
+
+    def _run():
+        try:
+            re.search(pattern, "a" * 50 + "!" + "a" * 50, flags=re.IGNORECASE)
+        except Exception:
+            result[0] = False
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout=0.5)
+    if t.is_alive():
+        return False
+    return result[0]
+
+
+def _filter_safe_regexes(patterns: list) -> list[str]:
+    safe: list[str] = []
+    for p in patterns:
+        if _is_safe_regex(p):
+            safe.append(p)
+        else:
+            logger.warning("Dropping unsafe/invalid config regex on load: %s", str(p)[:80])
+    return safe
 
 
 def _safe_regex_test(pattern: str, errs: list[str], name: str) -> None:
@@ -83,8 +122,8 @@ class ConfigStore:
             risk_monitor_max=int(data.get("risk_monitor_max", d.risk_monitor_max)),
             risk_sanitize_max=int(data.get("risk_sanitize_max", d.risk_sanitize_max)),
             self_heal_enabled=bool(data.get("self_heal_enabled", d.self_heal_enabled)),
-            blocked_input_regexes=list(data.get("blocked_input_regexes", d.blocked_input_regexes)),
-            sanitize_input_regexes=list(data.get("sanitize_input_regexes", d.sanitize_input_regexes)),
+            blocked_input_regexes=_filter_safe_regexes(data.get("blocked_input_regexes", d.blocked_input_regexes)),
+            sanitize_input_regexes=_filter_safe_regexes(data.get("sanitize_input_regexes", d.sanitize_input_regexes)),
         )
 
     def validate(self, cfg: RuntimeConfig) -> list[str]:

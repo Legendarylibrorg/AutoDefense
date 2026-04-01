@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import ipaddress
@@ -169,15 +170,13 @@ _PRIVATE_NETS = [
 ]
 
 
-def _host_is_private(hostname: str) -> bool:
-    """Check if a hostname resolves to a private/loopback IP, including DNS resolution."""
-    # Direct numeric IP check first (handles hex, octal, decimal representations)
+def _host_is_private_sync(hostname: str) -> bool:
+    """Synchronous check — meant to be called via run_in_executor."""
     try:
         addr = ipaddress.ip_address(hostname)
         return any(addr in net for net in _PRIVATE_NETS)
     except ValueError:
         pass
-    # DNS resolution to catch rebinding attacks (e.g. evil.com → 127.0.0.1)
     try:
         results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for _family, _type, _proto, _canonname, sockaddr in results:
@@ -193,10 +192,18 @@ def _host_is_private(hostname: str) -> bool:
     return False
 
 
-def _check_ssrf(url: str) -> list[str]:
-    """Check a URL for SSRF / internal network patterns, including numeric IP bypasses."""
-    reasons: list[str] = []
+def _host_is_private(hostname: str) -> bool:
+    """Non-blocking numeric IP check; DNS resolution deferred to async wrapper."""
+    try:
+        addr = ipaddress.ip_address(hostname)
+        return any(addr in net for net in _PRIVATE_NETS)
+    except ValueError:
+        return False
 
+
+def _check_ssrf_sync(url: str) -> list[str]:
+    """Regex-only SSRF check (no DNS). Fast, safe for sync context."""
+    reasons: list[str] = []
     for rx in SSRF_PATTERNS:
         try:
             if re.search(rx, url, flags=re.IGNORECASE):
@@ -204,7 +211,6 @@ def _check_ssrf(url: str) -> list[str]:
                 return reasons
         except re.error:
             pass
-
     try:
         parsed = urlparse(url)
         host = (parsed.hostname or "").strip("[]")
@@ -214,7 +220,29 @@ def _check_ssrf(url: str) -> list[str]:
             reasons.append(f"SSRF risk: cloud metadata hostname '{host}'")
     except Exception:
         pass
+    return reasons
 
+
+async def _check_ssrf_async(url: str) -> list[str]:
+    """Full SSRF check including non-blocking DNS resolution for rebinding detection."""
+    reasons = _check_ssrf_sync(url)
+    if reasons:
+        return reasons
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").strip("[]")
+        if host:
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                is_private = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, _host_is_private_sync, host),
+                    timeout=2.0,
+                )
+                if is_private:
+                    reasons.append(f"SSRF risk: hostname '{host}' resolves to a private/loopback address")
+    except (asyncio.TimeoutError, Exception):
+        pass
     return reasons
 
 
@@ -383,7 +411,7 @@ class ArtifactAgent:
 
                 # SSRF check on URLs in emails
                 for url in urls[:20]:
-                    ssrf_reasons = _check_ssrf(url)
+                    ssrf_reasons = await _check_ssrf_async(url)
                     if ssrf_reasons:
                         signals.append(
                             AgentSignal(
@@ -429,7 +457,7 @@ class ArtifactAgent:
                         )
 
                     # SSRF detection
-                    ssrf_reasons = _check_ssrf(txt)
+                    ssrf_reasons = await _check_ssrf_async(txt)
                     if ssrf_reasons:
                         item["blocked"] = True
                         signals.append(

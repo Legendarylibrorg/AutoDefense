@@ -20,7 +20,7 @@
 
 The start script:
 1. Copies `.env.example` to `.env` (if not already present)
-2. Auto-generates AES-256 encryption keys if they are empty
+2. Auto-generates AES-256 encryption keys, API key, and scanner HMAC key if they are empty
 3. Runs `docker compose up --build`
 
 ### What gets deployed
@@ -114,14 +114,16 @@ The host scanners are standalone Python scripts with zero dependencies. They can
 
 ```bash
 # Linux
-python3 kernel/scanner.py --post http://your-backend:8000 --loop 120
+python3 kernel/scanner.py --post http://your-backend:8000 --api-key YOUR_KEY --loop 120
 
 # macOS
-python3 macos/scanner.py --post http://your-backend:8000 --loop 120
+python3 macos/scanner.py --post http://your-backend:8000 --api-key YOUR_KEY --loop 120
 
 # Windows
-python windows\scanner.py --post http://your-backend:8000 --loop 120
+python windows\scanner.py --post http://your-backend:8000 --api-key YOUR_KEY --loop 120
 ```
+
+The `--api-key` flag is required when the backend has `AUTODEFENSE_API_KEY` configured. Alternatively, set the `AUTODEFENSE_API_KEY` environment variable. The scanner also signs payloads with HMAC-SHA256 if `AUTODEFENSE_SCANNER_HMAC_KEY` is set.
 
 ### Cron (Linux/macOS)
 
@@ -171,17 +173,19 @@ Register-ScheduledTask -TaskName "AutoDefenseScanner" -Action $action -Trigger $
 
 ### Security
 
-- **Never expose Redis** to the public internet — it should only be accessible to the backend
-- **Use HTTPS** in production — put a reverse proxy (nginx, Caddy, Traefik) in front of the backend
-- **Rotate encryption keys** periodically — update `AUTODEFENSE_DATA_KEY_B64` and `AUTODEFENSE_TRANSPORT_KEY_B64`
-- **Restrict CORS origins** — update `allow_origins` in `backend/app/main.py` to your actual frontend domain
+- **Never expose Redis** to the public internet — it should only be accessible within the Docker network
+- **Set `AUTODEFENSE_API_KEY`** — without it, all endpoints are unauthenticated (the start script auto-generates one)
+- **Use HTTPS** in production — put a reverse proxy (nginx, Caddy, Traefik) in front of the backend; HSTS headers are automatically added for HTTPS connections
+- **Rotate encryption keys** periodically — update `AUTODEFENSE_DATA_KEY_B64` and `AUTODEFENSE_TRANSPORT_KEY_B64`; note that existing encrypted data in Redis will become unreadable after rotation
+- **Restrict CORS origins** — set `AUTODEFENSE_CORS_ORIGINS` to your actual frontend domain(s)
 - **Run scanners with least privilege** — they work as unprivileged users for most checks (root recommended only for full Linux visibility)
+- **Set `AUTODEFENSE_ENVIRONMENT`** to something other than `local` in production — this disables Swagger/ReDoc and redacts platform info from `/health`
 
 ### Scaling
 
 - The backend is stateless (Redis is the only state) — it can be horizontally scaled behind a load balancer
-- Rate limiting is per-instance in-memory — use a Redis-backed rate limiter for multi-instance deployments
-- Redis Streams handle high throughput — the default stream trim keeps the last 1000 events
+- Rate limiting is per-instance in-memory (LRU-bounded at 10,000 clients) — use a Redis-backed rate limiter for multi-instance deployments
+- Redis Streams handle high throughput — the stream is trimmed to ~5,000 entries; forensic records keep the last 1,000
 
 ### Monitoring
 
@@ -192,9 +196,10 @@ Register-ScheduledTask -TaskName "AutoDefenseScanner" -Action $action -Trigger $
 
 ### Backup
 
-- Runtime config and forensic records are stored encrypted in Redis
+- Runtime config, dynamic rules, forensic records, and kernel status are stored with double-layer encryption in Redis
 - Back up Redis with `redis-cli BGSAVE` or Redis persistence (`appendonly yes`)
-- Encryption keys in `.env` should be stored securely (vault, secrets manager)
+- Encryption keys and API keys in `.env` should be stored securely (vault, secrets manager)
+- The `.env` file is excluded from version control via `.gitignore`
 
 ## File structure reference
 

@@ -63,20 +63,27 @@ curl -sS http://localhost:8000/analyze \
 
 ### POST /analyze/sealed
 
-Same as `/analyze` but with an AES-256-GCM encrypted payload. Requires `AUTODEFENSE_TRANSPORT_KEY_B64` to be configured.
+Same as `/analyze` but with a double-layer AES-256-GCM encrypted payload. Requires `AUTODEFENSE_TRANSPORT_KEY_B64` to be configured.
 
-**Request body:**
+**Request body (v2 envelope):**
 
 ```json
 {
   "sealed": {
-    "v": 1,
-    "alg": "AES-256-GCM",
-    "nonce_b64": "base64-encoded 12-byte nonce",
-    "ct_b64": "base64-encoded ciphertext",
-    "sha256": "hex digest of plaintext"
+    "v": 2,
+    "alg": "AES-256-GCM-DOUBLE",
+    "inner_nonce_b64": "base64(12-byte nonce for inner layer)",
+    "outer_nonce_b64": "base64(12-byte nonce for outer layer)",
+    "ct_b64": "base64(double-encrypted ciphertext)",
+    "sha256": "hex(SHA-256 of plaintext)",
+    "hmac": "hex(HMAC-SHA256 of plaintext)"
   }
 }
+```
+
+The three subkeys (inner AES, outer AES, HMAC) are derived from the master transport key via HKDF-SHA256 with distinct `info` parameters. See [Security](security.md) for details.
+
+Legacy v1 single-layer envelopes (`alg: "AES-256-GCM"`) are still accepted for backward compatibility.
 ```
 
 ### POST /scan
@@ -102,7 +109,7 @@ Artifact-only preflight scan (no full pipeline).
 
 ### POST /scan/sealed
 
-Encrypted version of `/scan`.
+Double-layer encrypted version of `/scan`. Same v2 envelope format as `/analyze/sealed`.
 
 ### POST /scan/kernel
 
@@ -160,7 +167,7 @@ Server-Sent Events (SSE) stream of real-time events.
 
 ### WS /events/ws
 
-WebSocket stream of real-time events. The frontend uses this as the primary transport with auto-reconnection and exponential backoff (1s to 30s).
+WebSocket stream of real-time events. Authentication is via the `Sec-WebSocket-Protocol` header — pass `auth.<api_key>` as a subprotocol. The frontend uses this as the primary transport with auto-reconnection and exponential backoff (1s to 30s). Connection limit: 50 concurrent WebSocket connections. Server-side idle timeout enforced.
 
 ### GET /alerts
 
@@ -221,15 +228,28 @@ Validation rules:
 - Max 200 regexes per list, max 300 chars per regex
 - All regexes must be valid Python regex syntax
 
+## Authentication
+
+All endpoints except `/health`, `/docs`, `/openapi.json`, and `/redoc` require authentication.
+
+| Transport | Method |
+|-----------|--------|
+| HTTP | `Authorization: Bearer <api_key>` header |
+| WebSocket | `Sec-WebSocket-Protocol: auth.<api_key>` header |
+
+API key comparison uses `hmac.compare_digest()` (constant-time) to prevent timing attacks.
+
 ## Rate limiting
 
-All endpoints except `/health`, `/docs`, and `/openapi.json` are rate-limited per client IP. Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header indicating when to retry.
+All authenticated endpoints are rate-limited at 120 requests per minute per client IP with a sliding window. The rate limiter uses an LRU-bounded `OrderedDict` (max 10,000 clients) to prevent memory exhaustion. Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header.
 
 ## Error responses
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Invalid request body or failed to unseal encrypted payload |
+| 400 | Invalid request body, failed to unseal payload, or malformed `Content-Length` |
+| 401 | Missing or invalid API key |
+| 413 | Request body exceeds 10 MB limit |
 | 422 | Pydantic validation error (field too long, invalid type, etc.) |
 | 429 | Rate limit exceeded |
 | 500 | Internal server error |

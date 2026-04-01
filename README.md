@@ -2,7 +2,7 @@
 
 Autonomous, event-driven, multi-agent defense system that monitors AI inputs, outputs, and tool calls in real time — scoring risk, responding autonomously, self-healing with dynamic guardrails, and streaming full observability to a React dashboard.
 
-**End-to-end AES-256-GCM encryption by default.** Keys auto-generated on first run.
+**Double-layer AES-256-GCM encryption by default** — every payload passes through two independent encryption layers with HKDF-derived subkeys, HMAC-SHA256 integrity binding, and SHA-256 hash verification. Keys auto-generated on first run.
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ flowchart LR
 .\scripts\start.ps1
 ```
 
-This copies `.env.example` to `.env`, auto-generates encryption keys, and runs `docker compose up --build`.
+This copies `.env.example` to `.env`, auto-generates encryption keys and API key, and runs `docker compose up --build`.
 
 | URL | What |
 |-----|------|
@@ -62,11 +62,26 @@ Coverage mapped to [OWASP LLM Top 10 (2025)](https://genai.owasp.org/resource/ow
 | Improper output handling | 14 XSS / injection patterns in model output |
 | Excessive agency / tool abuse | 60+ tool abuse patterns, 16 code execution regexes |
 | System prompt leakage | Input-side extraction blocking + output-side leak detection |
-| Unbounded consumption | Rate limiting (120 req/min/IP), input size limits, artifact caps |
-| Malicious artifacts | Extension blocking, polyglot detection, archive bombs, script markers |
-| SSRF | 17 internal/metadata/cloud URL patterns |
+| Unbounded consumption | Rate limiting (120 req/min/IP), 10 MB body limit, Pydantic size constraints, artifact caps |
+| Malicious artifacts | Extension blocking, polyglot detection, archive bombs (multi-entry), script markers |
+| SSRF | 17 internal/metadata/cloud URL patterns + async DNS rebinding detection |
 | Network sniffing & MITM | 30+ sniffer process detection, promiscuous interface detection, ARP spoofing, pcap files |
 | Rootkits & kernel exploits | Linux kernel scanner (hidden procs, LD_PRELOAD, kernel modules, sysctl hardening) |
+
+## Security hardening
+
+Six rounds of adversarial red-team auditing have hardened the system across every layer:
+
+| Area | Hardening |
+|------|-----------|
+| **Encryption** | Double-layer AES-256-GCM with 3 HKDF-derived subkeys (inner, outer, HMAC) + SHA-256 hash — 4 independent crypto checks per payload |
+| **Authentication** | Constant-time API key comparison (HMAC), WebSocket auth via `Sec-WebSocket-Protocol` header (no query param leakage) |
+| **Input validation** | NFKC Unicode normalization, zero-width character stripping, ReDoS guards on all dynamic regexes (config + rules), Pydantic field constraints |
+| **SSRF** | Regex patterns + numeric IP resolution (hex/octal/decimal) + non-blocking async DNS with 2s timeout |
+| **DoS protection** | 10 MB body limit (Content-Length + chunked), per-IP rate limiting with LRU eviction, WebSocket timeouts + connection caps |
+| **Infrastructure** | Non-root Docker containers, Redis password via `REDISCLI_AUTH` (no process list leaks), hardened Nginx CSP, platform info redaction in production |
+| **Self-healing** | Dynamic rules actually loaded and applied per-request, validated against ReDoS before activation |
+| **Crypto integrity** | `alg:none` downgrade rejection, HMAC-SHA256 scanner payload signing, sealed transport with AAD binding |
 
 ## Project structure
 

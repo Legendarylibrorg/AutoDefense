@@ -113,25 +113,33 @@ All events flow through Redis Streams via the `EventBus` (`core/event_bus.py`):
 | `self_heal.applied` | When dynamic rules are updated |
 
 The frontend consumes events via:
-- **WebSocket** (`/events/ws`) — primary, with auto-reconnection and exponential backoff
-- **SSE** (`/events/stream`) — fallback
+- **WebSocket** (`/events/ws`) — primary, authenticated via `Sec-WebSocket-Protocol: auth.<key>` header, with auto-reconnection and exponential backoff (1s to 30s)
+- **SSE** (`/events/stream`) — fallback, with configurable timeout
 - **REST** (`/events`) — initial load
 
 ## Data flow diagram
 
 ```mermaid
 flowchart TB
-    subgraph Encryption
-        TK[Transport Key<br>AES-256-GCM] --> Seal[Sealed Endpoints]
-        DK[Data Key<br>AES-256-GCM] --> Store[Redis Storage]
+    subgraph Encryption[Double-Layer Encryption]
+        MK[Master Key 32 bytes] --> HKDF[HKDF-SHA256]
+        HKDF --> IK[key_inner<br>Inner AES-256-GCM]
+        HKDF --> OK[key_outer<br>Outer AES-256-GCM]
+        HKDF --> HK[key_hmac<br>HMAC-SHA256]
+        IK --> Seal[Sealed Endpoints]
+        OK --> Seal
+        HK --> Seal
+        IK --> Store[Redis Storage]
+        OK --> Store
+        HK --> Store
     end
 
     subgraph Storage[Redis]
-        Config[Runtime Config<br>encrypted]
-        Rules[Dynamic Rules<br>encrypted]
-        Forensic[Forensic Records<br>encrypted]
+        Config[Runtime Config<br>v2 encrypted]
+        Rules[Dynamic Rules<br>v2 encrypted]
+        Forensic[Forensic Records<br>v2 encrypted]
         Events[Event Stream]
-        KernelStatus[Kernel Status<br>encrypted]
+        KernelStatus[Kernel Status<br>v2 encrypted]
     end
 
     subgraph Pipeline
@@ -140,7 +148,7 @@ flowchart TB
         Response --> Rules
     end
 
-    Client -->|sealed payload| Seal
+    Client -->|double-sealed payload| Seal
     Seal --> Pipeline
     Pipeline --> Events
     Events --> Dashboard
@@ -152,7 +160,7 @@ flowchart TB
 |-------|-----------|
 | Backend | Python 3.11, FastAPI, Pydantic, uvicorn |
 | Event bus | Redis 7 Streams |
-| Encryption | Python `cryptography` (AESGCM), Web Crypto API |
-| Frontend | React 18, TypeScript, Vite 5, Tailwind CSS, Recharts |
+| Encryption | Python `cryptography` (AESGCM, HKDF), Web Crypto API (AES-GCM, HKDF, HMAC) |
+| Frontend | React 18, TypeScript, Vite 6, Tailwind CSS, Recharts |
 | Serving | nginx (frontend), uvicorn (backend) |
 | Containerization | Docker, Docker Compose |

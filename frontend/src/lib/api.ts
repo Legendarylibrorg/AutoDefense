@@ -98,15 +98,17 @@ export type AnalyzeResponse = {
 };
 
 type SealedEnvelope = {
-  v: number;
-  alg: "AES-256-GCM";
-  nonce_b64: string;
+  v: 2;
+  alg: "AES-256-GCM-DOUBLE";
+  inner_nonce_b64: string;
+  outer_nonce_b64: string;
   ct_b64: string;
   sha256: string;
+  hmac: string;
 };
 
- const httpBase = import.meta.env.VITE_BACKEND_HTTP ?? "http://localhost:8000";
- const wsBase = import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000";
+const httpBase = import.meta.env.VITE_BACKEND_HTTP ?? "http://localhost:8000";
+const wsBase = import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000";
 const transportKeyB64 = import.meta.env.VITE_TRANSPORT_KEY_B64 as string | undefined;
 const transportSealEnabled =
   (import.meta.env.VITE_TRANSPORT_SEAL_ENABLED ?? "false") === "true" && !!transportKeyB64;
@@ -129,8 +131,6 @@ async function sha256Hex(data: Uint8Array): Promise<string> {
 }
 
 function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
-  // Ensure we pass a real ArrayBuffer with the correct slice.
-  // (Avoids TS BufferSource issues on newer lib.dom types.)
   const ab = u8.buffer;
   return ab.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
 }
@@ -151,29 +151,72 @@ function bytesFromB64(s: string): Uint8Array {
   return out;
 }
 
-async function importAesKey(): Promise<CryptoKey> {
+async function importHkdfBaseKey(): Promise<CryptoKey> {
   if (!transportKeyB64) throw new Error("Missing VITE_TRANSPORT_KEY_B64");
   const raw = bytesFromB64(transportKeyB64);
   if (raw.byteLength !== 32) throw new Error("VITE_TRANSPORT_KEY_B64 must decode to 32 bytes");
-  return crypto.subtle.importKey("raw", toArrayBuffer(raw), { name: "AES-GCM" }, false, ["encrypt"]);
+  return crypto.subtle.importKey("raw", toArrayBuffer(raw), "HKDF", false, ["deriveKey"]);
+}
+
+async function deriveAesSubkey(base: CryptoKey, info: string): Promise<CryptoKey> {
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: new TextEncoder().encode(info) },
+    base,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt"],
+  );
+}
+
+async function deriveHmacSubkey(base: CryptoKey, info: string): Promise<CryptoKey> {
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: new TextEncoder().encode(info) },
+    base,
+    { name: "HMAC", hash: "SHA-256", length: 256 },
+    false,
+    ["sign"],
+  );
+}
+
+async function hmacSha256Hex(key: CryptoKey, data: Uint8Array): Promise<string> {
+  const sig = await crypto.subtle.sign("HMAC", key, toArrayBuffer(data));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function sealJson(obj: unknown, aad: string): Promise<SealedEnvelope> {
   const raw = new TextEncoder().encode(JSON.stringify(obj));
   const sha256 = await sha256Hex(raw);
-  const key = await importAesKey();
-  const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce, additionalData: new TextEncoder().encode(aad) },
-    key,
-    toArrayBuffer(raw)
+
+  const base = await importHkdfBaseKey();
+  const innerKey = await deriveAesSubkey(base, "autodefense-inner-v2");
+  const outerKey = await deriveAesSubkey(base, "autodefense-outer-v2");
+  const hmacKey = await deriveHmacSubkey(base, "autodefense-hmac-v2");
+
+  const mac = await hmacSha256Hex(hmacKey, raw);
+  const aadBytes = new TextEncoder().encode(aad);
+
+  const innerNonce = crypto.getRandomValues(new Uint8Array(12));
+  const innerCt = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: innerNonce, additionalData: toArrayBuffer(aadBytes) },
+    innerKey,
+    toArrayBuffer(raw),
   );
+
+  const outerNonce = crypto.getRandomValues(new Uint8Array(12));
+  const outerCt = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: outerNonce, additionalData: toArrayBuffer(aadBytes) },
+    outerKey,
+    innerCt,
+  );
+
   return {
-    v: 1,
-    alg: "AES-256-GCM",
-    nonce_b64: b64(nonce),
-    ct_b64: b64(new Uint8Array(ct)),
-    sha256
+    v: 2,
+    alg: "AES-256-GCM-DOUBLE",
+    inner_nonce_b64: b64(innerNonce),
+    outer_nonce_b64: b64(outerNonce),
+    ct_b64: b64(new Uint8Array(outerCt)),
+    sha256,
+    hmac: mac,
   };
 }
  

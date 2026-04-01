@@ -236,7 +236,7 @@ async def _check_ssrf_async(url: str) -> list[str]:
                 ipaddress.ip_address(host)
             except ValueError:
                 is_private = await asyncio.wait_for(
-                    asyncio.get_event_loop().run_in_executor(None, _host_is_private_sync, host),
+                    asyncio.get_running_loop().run_in_executor(None, _host_is_private_sync, host),
                     timeout=2.0,
                 )
                 if is_private:

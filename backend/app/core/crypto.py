@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac as _hmac
 import json
 import os
-from dataclasses import dataclass
 from typing import Any
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.hashes import SHA256
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
 def sha256_hex(data: bytes) -> str:
@@ -23,32 +25,46 @@ def _b64d(s: str) -> bytes:
     return base64.b64decode(s.encode("ascii"), validate=True)
 
 
-@dataclass(frozen=True)
-class EncryptedEnvelope:
-    v: int
-    alg: str
-    nonce_b64: str
-    ct_b64: str
-    sha256: str
+def _derive_subkey(master: bytes, info: bytes) -> bytes:
+    """Deterministic subkey derivation via HKDF-SHA256 (RFC 5869)."""
+    return HKDF(algorithm=SHA256(), length=32, salt=None, info=info).derive(master)
 
 
 class CryptoManager:
     """
-    Deterministic UX goal: encryption is transparent to callers.
-    Security goal: encrypt persisted payloads (at-rest in Redis) with AES-256-GCM (AEAD).
+    Double-layer AES-256-GCM encryption with HMAC-SHA256 integrity binding.
 
-    Key management:
-    - Provide a 32-byte key via AUTODEFENSE_DATA_KEY_B64 (base64).
-    - If missing, encryption is disabled (still hashes for observability).
+    From a single 32-byte master key, three independent subkeys are derived
+    via HKDF-SHA256:
+
+        key_inner  = HKDF(master, info="autodefense-inner-v2")   → inner AES-256-GCM
+        key_outer  = HKDF(master, info="autodefense-outer-v2")   → outer AES-256-GCM
+        key_hmac   = HKDF(master, info="autodefense-hmac-v2")    → HMAC-SHA256
+
+    Encrypt path:
+        1. SHA-256 hash of canonical JSON plaintext
+        2. HMAC-SHA256(key_hmac, plaintext)
+        3. inner_ct = AES-256-GCM(key_inner, nonce1, plaintext, aad)
+        4. outer_ct = AES-256-GCM(key_outer, nonce2, inner_ct, aad)
+
+    Decrypt path reverses all four checks.  Any single failure → empty dict.
+
+    v1 single-layer envelopes are still accepted for backward compatibility.
     """
 
     def __init__(self, key_b64: str | None):
-        self._key = None
+        self._key: bytes | None = None
+        self._key_inner: bytes | None = None
+        self._key_outer: bytes | None = None
+        self._key_hmac: bytes | None = None
         if key_b64:
             try:
                 key = _b64d(key_b64)
                 if len(key) == 32:
                     self._key = key
+                    self._key_inner = _derive_subkey(key, b"autodefense-inner-v2")
+                    self._key_outer = _derive_subkey(key, b"autodefense-outer-v2")
+                    self._key_hmac = _derive_subkey(key, b"autodefense-hmac-v2")
             except Exception:
                 self._key = None
 
@@ -56,43 +72,112 @@ class CryptoManager:
     def enabled(self) -> bool:
         return self._key is not None
 
+    # ------------------------------------------------------------------
+    # Encrypt
+    # ------------------------------------------------------------------
+
     def encrypt_json(self, obj: dict[str, Any], *, aad: bytes = b"") -> dict[str, Any]:
         raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
         digest = sha256_hex(raw)
+
         if not self.enabled:
             return {"v": 1, "alg": "none", "sha256": digest, "pt": obj}
 
-        nonce = os.urandom(12)
-        aes = AESGCM(self._key)
-        ct = aes.encrypt(nonce, raw, aad)
-        env = EncryptedEnvelope(v=1, alg="AES-256-GCM", nonce_b64=_b64e(nonce), ct_b64=_b64e(ct), sha256=digest)
-        return env.__dict__
+        assert self._key_inner and self._key_outer and self._key_hmac
+
+        mac = _hmac.new(self._key_hmac, raw, hashlib.sha256).hexdigest()
+
+        inner_nonce = os.urandom(12)
+        inner_ct = AESGCM(self._key_inner).encrypt(inner_nonce, raw, aad)
+
+        outer_nonce = os.urandom(12)
+        outer_ct = AESGCM(self._key_outer).encrypt(outer_nonce, inner_ct, aad)
+
+        return {
+            "v": 2,
+            "alg": "AES-256-GCM-DOUBLE",
+            "inner_nonce_b64": _b64e(inner_nonce),
+            "outer_nonce_b64": _b64e(outer_nonce),
+            "ct_b64": _b64e(outer_ct),
+            "sha256": digest,
+            "hmac": mac,
+        }
+
+    # ------------------------------------------------------------------
+    # Decrypt
+    # ------------------------------------------------------------------
 
     def decrypt_json(self, payload: dict[str, Any], *, aad: bytes = b"") -> dict[str, Any]:
         alg = payload.get("alg")
+
         if alg == "none":
             if self.enabled:
-                # Reject alg:none when encryption is active (prevents JWT-style downgrade)
                 return {}
             pt = payload.get("pt")
-            if isinstance(pt, dict):
-                return pt
-            return {}
+            return pt if isinstance(pt, dict) else {}
 
         if not self.enabled:
             return {}
 
-        nonce = _b64d(str(payload["nonce_b64"]))
-        ct = _b64d(str(payload["ct_b64"]))
-        aes = AESGCM(self._key)
+        if alg == "AES-256-GCM-DOUBLE":
+            return self._decrypt_v2(payload, aad=aad)
+
+        return self._decrypt_v1(payload, aad=aad)
+
+    def _decrypt_v2(self, payload: dict[str, Any], *, aad: bytes) -> dict[str, Any]:
+        assert self._key_inner and self._key_outer and self._key_hmac
+
         try:
-            raw = aes.decrypt(nonce, ct, aad)
+            outer_nonce = _b64d(str(payload["outer_nonce_b64"]))
+            ct = _b64d(str(payload["ct_b64"]))
+        except Exception:
+            return {}
+
+        try:
+            inner_ct = AESGCM(self._key_outer).decrypt(outer_nonce, ct, aad)
         except InvalidTag:
             return {}
-        # integrity check: hash of plaintext
-        expected = str(payload.get("sha256", ""))
-        if expected and sha256_hex(raw) != expected:
+
+        try:
+            inner_nonce = _b64d(str(payload["inner_nonce_b64"]))
+        except Exception:
             return {}
+
+        try:
+            raw = AESGCM(self._key_inner).decrypt(inner_nonce, inner_ct, aad)
+        except InvalidTag:
+            return {}
+
+        expected_hmac = str(payload.get("hmac", ""))
+        if expected_hmac:
+            actual = _hmac.new(self._key_hmac, raw, hashlib.sha256).hexdigest()
+            if not _hmac.compare_digest(actual, expected_hmac):
+                return {}
+
+        expected_sha = str(payload.get("sha256", ""))
+        if expected_sha and sha256_hex(raw) != expected_sha:
+            return {}
+
         obj = json.loads(raw.decode("utf-8"))
         return obj if isinstance(obj, dict) else {}
 
+    def _decrypt_v1(self, payload: dict[str, Any], *, aad: bytes) -> dict[str, Any]:
+        """Backward-compatible single-layer decrypt for pre-existing v1 envelopes."""
+        assert self._key
+        try:
+            nonce = _b64d(str(payload["nonce_b64"]))
+            ct = _b64d(str(payload["ct_b64"]))
+        except Exception:
+            return {}
+
+        try:
+            raw = AESGCM(self._key).decrypt(nonce, ct, aad)
+        except InvalidTag:
+            return {}
+
+        expected = str(payload.get("sha256", ""))
+        if expected and sha256_hex(raw) != expected:
+            return {}
+
+        obj = json.loads(raw.decode("utf-8"))
+        return obj if isinstance(obj, dict) else {}

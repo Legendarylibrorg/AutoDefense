@@ -75,6 +75,16 @@ def _load_baseline_policy() -> dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+_BASELINE_POLICY_CACHE: dict[str, Any] | None = None
+
+
+def _get_baseline_policy() -> dict[str, Any]:
+    global _BASELINE_POLICY_CACHE
+    if _BASELINE_POLICY_CACHE is None:
+        _BASELINE_POLICY_CACHE = _load_baseline_policy()
+    return _BASELINE_POLICY_CACHE
+
+
 @dataclass
 class RuntimeConfig:
     version: int
@@ -91,7 +101,7 @@ class ConfigStore:
 
     def __init__(self, redis: Redis):
         self.redis = redis
-        self._baseline = _load_baseline_policy()
+        self._baseline = _get_baseline_policy()
         self.crypto = CryptoManager(settings.data_key_b64 if settings.data_encryption_enabled else None)
 
     def defaults(self) -> RuntimeConfig:

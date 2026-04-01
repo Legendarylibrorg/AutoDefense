@@ -1,0 +1,108 @@
+# Configuration
+
+## Environment variables
+
+All backend variables use the `AUTODEFENSE_` prefix and are read by Pydantic Settings from the environment or `.env` file.
+
+### Core
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `AUTODEFENSE_LOG_LEVEL` | string | `INFO` | Python logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `AUTODEFENSE_ENVIRONMENT` | string | `local` | Environment identifier |
+| `AUTODEFENSE_REDIS_URL` | string | `redis://redis:6379/0` | Redis connection URL |
+| `AUTODEFENSE_REDIS_STREAM_KEY` | string | `autodefense:events` | Redis stream key for events |
+| `AUTODEFENSE_REDIS_CONSUMER_GROUP` | string | `dashboard` | Redis consumer group name |
+
+### Risk thresholds
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `AUTODEFENSE_RISK_ALLOW_MAX` | int | `30` | Maximum risk score that results in `allow` |
+| `AUTODEFENSE_RISK_MONITOR_MAX` | int | `60` | Maximum risk score that results in `log_monitor` |
+| `AUTODEFENSE_RISK_SANITIZE_MAX` | int | `80` | Maximum risk score that results in `sanitize` |
+
+### Self-healing
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `AUTODEFENSE_SELF_HEAL_ENABLED` | bool | `true` | Enable dynamic rule generation from incidents |
+| `AUTODEFENSE_SELF_HEAL_MAX_RULE_GROWTH` | int | `50` | Maximum dynamic rules per category |
+
+### Encryption
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `AUTODEFENSE_DATA_ENCRYPTION_ENABLED` | bool | `true` | Encrypt data stored in Redis |
+| `AUTODEFENSE_DATA_KEY_B64` | string | `""` | Base64-encoded 32-byte AES-256 key (auto-generated if empty) |
+| `AUTODEFENSE_TRANSPORT_SEAL_ENABLED` | bool | `true` | Require encrypted request payloads on `/*/sealed` endpoints |
+| `AUTODEFENSE_TRANSPORT_KEY_B64` | string | `""` | Base64-encoded 32-byte AES-256 key (shared with frontend) |
+
+### LLM (optional, disabled by default)
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `AUTODEFENSE_LLM_ENABLED` | bool | `false` | Enable LLM-based classification (future extension) |
+| `AUTODEFENSE_LLM_PROVIDER` | string | `none` | LLM provider (`none`, `openai`) |
+| `AUTODEFENSE_LLM_API_KEY` | string | `null` | API key for the LLM provider |
+| `AUTODEFENSE_LLM_MODEL` | string | `gpt-4.1-mini` | Model identifier |
+
+### Frontend (Vite build-time)
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `VITE_BACKEND_HTTP` | string | `http://localhost:8000` | Backend HTTP URL |
+| `VITE_BACKEND_WS` | string | `ws://localhost:8000` | Backend WebSocket URL |
+| `VITE_TRANSPORT_SEAL_ENABLED` | string | `true` | Enable sealed transport from the frontend |
+| `VITE_TRANSPORT_KEY_B64` | string | `""` | Transport encryption key (must match backend) |
+
+## Runtime configuration
+
+Stored encrypted in Redis, editable via `GET/PUT /config` or the dashboard Config panel.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `version` | int | 1 | Config version (incremented on change) |
+| `risk_allow_max` | int | 30 | Risk threshold for allow |
+| `risk_monitor_max` | int | 60 | Risk threshold for log_monitor |
+| `risk_sanitize_max` | int | 80 | Risk threshold for sanitize |
+| `self_heal_enabled` | bool | true | Enable/disable self-healing |
+| `blocked_input_regexes` | string[] | from `default_policy.json` | Input patterns that trigger `block_isolate` |
+| `sanitize_input_regexes` | string[] | from `default_policy.json` | Input patterns that trigger redaction |
+
+### Validation rules
+
+- `0 <= risk_allow_max <= risk_monitor_max <= risk_sanitize_max <= 100`
+- Maximum 200 regexes per list
+- Maximum 300 characters per regex
+- All regexes must be valid Python `re` syntax
+
+### Default policy (`backend/app/policies/default_policy.json`)
+
+The default policy includes 17 blocked regexes (exfiltration, jailbreak, destructive commands, code execution, credential patterns) and 10 sanitize regexes (instruction override, prompt extraction, roleplay, credential access).
+
+## Docker Compose services
+
+| Service | Profile | Description |
+|---------|---------|-------------|
+| `redis` | default | Redis 7 Alpine |
+| `backend` | default | FastAPI backend |
+| `frontend` | default | React dashboard (nginx) |
+| `simulator` | `demo` | Attack simulation scripts |
+| `kernel-scanner` | `security` | Linux host scanner (requires `pid: host` and volume mounts) |
+
+### Starting with profiles
+
+```bash
+# Default services only
+docker compose up --build
+
+# Include attack simulator
+docker compose --profile demo up --build
+
+# Include kernel scanner
+docker compose --profile security up --build
+
+# Both
+docker compose --profile demo --profile security up --build
+```

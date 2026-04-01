@@ -1,0 +1,115 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+      - --requirepass
+      - "${AUTODEFENSE_REDIS_PASSWORD:?Set AUTODEFENSE_REDIS_PASSWORD in .env (run scripts/start.sh)}"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "REDISCLI_AUTH=$${AUTODEFENSE_REDIS_PASSWORD} redis-cli PING"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    environment:
+      - AUTODEFENSE_REDIS_PASSWORD=${AUTODEFENSE_REDIS_PASSWORD:?Set AUTODEFENSE_REDIS_PASSWORD in .env (run scripts/start.sh)}
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      - AUTODEFENSE_REDIS_URL=redis://:${AUTODEFENSE_REDIS_PASSWORD}@redis:6379/0
+      - AUTODEFENSE_LOG_LEVEL=${AUTODEFENSE_LOG_LEVEL:-INFO}
+      - AUTODEFENSE_SELF_HEAL_ENABLED=${AUTODEFENSE_SELF_HEAL_ENABLED:-true}
+      - AUTODEFENSE_DATA_ENCRYPTION_ENABLED=${AUTODEFENSE_DATA_ENCRYPTION_ENABLED:-true}
+      - AUTODEFENSE_DATA_KEY_B64=${AUTODEFENSE_DATA_KEY_B64:-}
+      - AUTODEFENSE_TRANSPORT_SEAL_ENABLED=${AUTODEFENSE_TRANSPORT_SEAL_ENABLED:-true}
+      - AUTODEFENSE_TRANSPORT_KEY_B64=${AUTODEFENSE_TRANSPORT_KEY_B64:-}
+      - AUTODEFENSE_API_KEY=${AUTODEFENSE_API_KEY:-}
+      - AUTODEFENSE_SCANNER_HMAC_KEY=${AUTODEFENSE_SCANNER_HMAC_KEY:-}
+      - AUTODEFENSE_CORS_ORIGINS=${AUTODEFENSE_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - AUTODEFENSE_ENVIRONMENT=${AUTODEFENSE_ENVIRONMENT:-local}
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).read()",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_BACKEND_HTTP: http://localhost:8000
+        VITE_BACKEND_WS: ws://localhost:8000
+        VITE_TRANSPORT_SEAL_ENABLED: "${AUTODEFENSE_TRANSPORT_SEAL_ENABLED:-true}"
+        VITE_TRANSPORT_KEY_B64: "${AUTODEFENSE_TRANSPORT_KEY_B64:-}"
+        VITE_API_KEY: "${AUTODEFENSE_API_KEY:-}"
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - internal
+
+  simulator:
+    build:
+      context: ./simulations
+    environment:
+      - BASE_URL=http://backend:8000
+      - AUTODEFENSE_API_KEY=${AUTODEFENSE_API_KEY:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles: ["demo"]
+    networks:
+      - internal
+
+  kernel-scanner:
+    build:
+      context: ./kernel
+    pid: host
+    read_only: true
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /boot:/host/boot:ro
+      - /dev:/host/dev:ro
+    environment:
+      - PROC_ROOT=/host/proc
+      - SYS_ROOT=/host/sys
+      - SCANNER_HMAC_KEY=${AUTODEFENSE_SCANNER_HMAC_KEY:-}
+      - AUTODEFENSE_API_KEY=${AUTODEFENSE_API_KEY:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles: ["security"]
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge

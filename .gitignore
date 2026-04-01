@@ -1,0 +1,43 @@
+.env
+.env.*
+!.env.example
+.venv/
+**/__pycache__/
+**/*.pyc
+*.egg-info/
+node_modules/
+dist/
+*.tsbuildinfo
+.pytest_cache/
+.DS_Store
+
+# Secrets and certs
+*.pem
+*.key
+*.cert
+*.p12
+.secrets
+
+# Logs
+*.log
+
+# Databases
+*.sqlite
+*.db
+
+# Coverage
+.coverage
+htmlcov/
+coverage/
+
+# Editor / IDE
+*.bak
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+.cursor/
+
+# Docker overrides
+docker-compose.override.yml

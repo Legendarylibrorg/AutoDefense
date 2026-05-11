@@ -6,7 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "auto-defense-backend"
 version = "0.1.0"
 description = "Autonomous AI Defense System backend (FastAPI + agents + Redis event bus)"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
+authors = [{ name = "AutoDefense contributors" }]
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
@@ -15,6 +18,15 @@ dependencies = [
   "redis>=5.0.0",
   "python-dotenv>=1.0.1",
   "cryptography>=42.0.0",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
 ]
 
 [project.optional-dependencies]

@@ -2,7 +2,9 @@
 
 Autonomous, event-driven, multi-agent defense system that monitors AI inputs, outputs, and tool calls in real time — scoring risk, responding autonomously, self-healing with dynamic guardrails, and streaming full observability to a React dashboard.
 
-**Double-layer AES-256-GCM encryption by default** — every payload passes through two independent encryption layers with HKDF-derived subkeys, HMAC-SHA256 integrity binding, and SHA-256 hash verification. Keys auto-generated on first run.
+**Double-layer AES-256-GCM encryption by default** — transport and at-rest paths use two AES-GCM layers with HKDF-derived subkeys, HMAC-SHA256 integrity binding, and SHA-256 verification where documented in [Security](docs/security.md). Keys can be auto-generated on first run via `scripts/start.sh`.
+
+This software uses **pattern-based heuristics and configurable rules**. It **does not guarantee** detection of every attack, elimination of false positives, or fitness for any particular compliance regime or threat model. Evaluate against your own requirements.
 
 ```mermaid
 flowchart LR
@@ -68,9 +70,11 @@ Coverage mapped to [OWASP LLM Top 10 (2025)](https://genai.owasp.org/resource/ow
 | Network sniffing & MITM | 30+ sniffer process detection, promiscuous interface detection, ARP spoofing, pcap files |
 | Rootkits & kernel exploits | Linux kernel scanner (hidden procs, LD_PRELOAD, kernel modules, sysctl hardening) |
 
+Counts in this table are **illustrative** and can change as rules evolve; they are not a runtime contract.
+
 ## Security hardening
 
-Six rounds of adversarial red-team auditing have hardened the system across every layer:
+The codebase has been refined through **multiple internal security-focused review passes** during development (summarized in [docs/security.md](docs/security.md)). That is **not** a substitute for independent penetration testing, formal certification, or your own deployment reviews.
 
 | Area | Hardening |
 |------|-----------|
@@ -106,8 +110,21 @@ AUTO DEFENSE/
 ├── simulations/             # Attack simulation scripts
 ├── scripts/                 # Start scripts (sh + ps1)
 ├── docs/                    # Documentation
+├── SECURITY.md              # Vulnerability reporting
+├── CONTRIBUTING.md          # Development and PR guidelines
+├── CHANGELOG.md             # Release notes
+├── CODE_OF_CONDUCT.md       # Community standards
 └── docker-compose.yml
 ```
+
+## Contributing / security / changelog
+
+| Document | Contents |
+|----------|----------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Local dev, tests, PR expectations |
+| [SECURITY.md](SECURITY.md) | How to report vulnerabilities responsibly |
+| [CHANGELOG.md](CHANGELOG.md) | Release-oriented change summary |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Community expectations |
 
 ## Documentation
 
@@ -122,4 +139,4 @@ AUTO DEFENSE/
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

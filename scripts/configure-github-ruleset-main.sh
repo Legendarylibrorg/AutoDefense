@@ -35,12 +35,13 @@ repo="${slug#*/}"
 case "$REQUIRE_CODEOWNERS" in 1 | true | yes) co_json=true ;; *) co_json=false ;; esac
 case "$REQUIRE_CONVERSATIONS_RESOLVED" in 1 | true | yes) rt_json=true ;; *) rt_json=false ;; esac
 
-CONTEXTS_JSON="${CONTEXTS_JSON:-[
-  {\"context\": \"Backend CI / Python 3.11\"},
-  {\"context\": \"Backend CI / Python 3.12\"},
-  {\"context\": \"Frontend CI / Node 20\"},
-  {\"context\": \"Frontend CI / Node 22\"}
-]}"
+# Single-line default so every /bin/sh passes valid JSON to jq --argjson.
+_default_contexts='[{"context":"Backend CI / Python 3.11"},{"context":"Backend CI / Python 3.12"},{"context":"Frontend CI / Node 20"},{"context":"Frontend CI / Node 22"}]'
+CONTEXTS_JSON="${CONTEXTS_JSON:-$_default_contexts}"
+
+reviews_raw="${REQUIRED_APPROVALS:-0}"
+reviews_json=$(printf '%s' "$reviews_raw" | tr -cd '0123456789')
+[ -n "$reviews_json" ] || reviews_json=0
 
 body_file="$(mktemp)"
 trap 'rm -f "$body_file"' EXIT
@@ -48,7 +49,7 @@ trap 'rm -f "$body_file"' EXIT
 jq -n \
   --arg name "$RULESET_NAME" \
   --arg branch "refs/heads/${DEFAULT_BRANCH}" \
-  --argjson reviews "$(printf '%s' "$REQUIRED_APPROVALS" | jq -R 'tonumber? // 0')" \
+  --argjson reviews "$reviews_json" \
   --argjson codeowners "$co_json" \
   --argjson resolve_threads "$rt_json" \
   --argjson contexts "$CONTEXTS_JSON" \

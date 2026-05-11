@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -9,11 +9,11 @@ import {
   XAxis,
   YAxis
 } from "recharts";
- import type { EventItem } from "../lib/api";
- 
- type Point = { t: string; risk: number };
- 
- function extractRisk(e: EventItem): number | null {
+import type { EventItem } from "../lib/api";
+
+type Point = { t: string; risk: number };
+
+function extractRisk(e: EventItem): number | null {
    if (!e.type.startsWith("decision.")) return null;
    const r = (e.payload as any)?.risk_score;
    const n = typeof r === "number" ? r : Number(r);

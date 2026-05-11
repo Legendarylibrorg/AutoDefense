@@ -1,7 +1,6 @@
- import React from "react";
- import type { EventItem } from "../lib/api";
- 
- function tone(type: string) {
+import type { EventItem } from "../lib/api";
+
+function tone(type: string) {
    if (type.includes("block_isolate")) return "text-danger";
    if (type.includes("sanitize")) return "text-warn";
    if (type.includes("incident")) return "text-warn";

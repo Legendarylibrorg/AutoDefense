@@ -1,8 +1,8 @@
- import React from "react";
- 
- export function StatCard(props: {
+import type { ReactNode } from "react";
+
+export function StatCard(props: {
    title: string;
-   value: React.ReactNode;
+  value: ReactNode;
    hint?: string;
    tone?: "ok" | "warn" | "danger" | "neutral";
  }) {

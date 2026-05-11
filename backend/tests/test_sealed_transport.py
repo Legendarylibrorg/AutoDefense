@@ -33,9 +33,7 @@ def _assert_unseal_rejected(res: Response) -> None:
         ),
     ),
 )
-async def test_sealed_v2_roundtrip(
-    client, path: str, aad: bytes, payload: dict[str, Any]
-) -> None:
+async def test_sealed_v2_roundtrip(client, path: str, aad: bytes, payload: dict[str, Any]) -> None:
     env = transport_seal_v2(payload, aad=aad)
     res = await client.post(path, json={"sealed": env})
     assert res.status_code == 200

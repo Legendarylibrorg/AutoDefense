@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import ValidationError
 
 from app.agents.kernel import KernelAgent
 from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
@@ -50,10 +51,14 @@ async def scan_kernel(
     x_scanner_signature: str | None = Header(default=None),
 ):
     raw_body = await request.body()
-    payload = KernelScanPayload.model_validate_json(raw_body)
-
     if settings.scanner_hmac_key:
         _verify_hmac(raw_body, x_scanner_signature)
+    try:
+        payload = KernelScanPayload.model_validate_json(raw_body)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422, detail="Invalid JSON or kernel scan payload shape"
+        ) from exc
 
     bus = EventBus(redis)
     cfg = await ConfigStore(redis).load()
@@ -137,9 +142,26 @@ async def kernel_status(redis=Depends(get_redis)) -> dict:
         return {"scanned": False}
     if isinstance(raw, (bytes, bytearray)):
         raw = raw.decode("utf-8", errors="replace")
-    data = json.loads(raw)
-    if isinstance(data, dict) and data.get("alg") in STORE_ENVELOPE_ALGS:
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("kernel_status: invalid JSON in Redis", extra={"event_type": "security"})
+        return {"scanned": False, "kernel_status_unavailable": True}
+
+    if not isinstance(data, dict):
+        return {"scanned": False, "kernel_status_unavailable": True}
+
+    envelope_alg = data.get("alg")
+    if envelope_alg in STORE_ENVELOPE_ALGS:
         crypto = CryptoManager(settings.data_key_b64 if settings.data_encryption_enabled else None)
-        data = crypto.decrypt_json(data, aad=b"kernel_status")
+        decrypted = crypto.decrypt_json(data, aad=b"kernel_status")
+        if not decrypted:
+            logger.warning(
+                "kernel_status: decrypt failed or rejected envelope",
+                extra={"event_type": "security"},
+            )
+            return {"scanned": False, "kernel_status_unavailable": True}
+        data = decrypted
+
     data["scanned"] = True
     return data

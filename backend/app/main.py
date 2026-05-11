@@ -124,7 +124,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 
 
 # ---------------------------------------------------------------------------
-# API-key authentication (C1 fix)
+# API-key authentication
 # ---------------------------------------------------------------------------
 
 
@@ -290,7 +290,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Autonomous AI Defense System",
-        version="0.2.0",
+        version="0.1.0",
         lifespan=lifespan,
         docs_url="/docs" if settings.is_local else None,
         redoc_url="/redoc" if settings.is_local else None,

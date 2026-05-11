@@ -89,5 +89,4 @@ async def metrics(redis=Depends(get_redis)) -> dict:
     return {
         "events_total_recent": total,
         "events_by_type_recent": by_type,
-        "health": {"redis": "ok"},
     }

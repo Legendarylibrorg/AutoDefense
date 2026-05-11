@@ -14,25 +14,25 @@ import type { EventItem } from "../lib/api";
 type Point = { t: string; risk: number };
 
 function extractRisk(e: EventItem): number | null {
-   if (!e.type.startsWith("decision.")) return null;
-   const r = (e.payload as any)?.risk_score;
-   const n = typeof r === "number" ? r : Number(r);
-   return Number.isFinite(n) ? n : null;
- }
- 
+  if (!e.type.startsWith("decision.")) return null;
+  const risk = e.payload["risk_score"];
+  const n = typeof risk === "number" ? risk : Number(risk);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function RiskChart(props: {
   events: EventItem[];
   thresholds?: { risk_allow_max: number; risk_monitor_max: number; risk_sanitize_max: number };
 }) {
-   const data = useMemo(() => {
-     const pts: Point[] = [];
-     for (const e of props.events) {
-       const risk = extractRisk(e);
-       if (risk === null) continue;
-       pts.push({ t: new Date(e.ts).toLocaleTimeString(), risk });
-     }
-     return pts.slice(-50);
-   }, [props.events]);
+  const data = useMemo(() => {
+    const pts: Point[] = [];
+    for (const e of props.events) {
+      const risk = extractRisk(e);
+      if (risk === null) continue;
+      pts.push({ t: new Date(e.ts).toLocaleTimeString(), risk });
+    }
+    return pts.slice(-50);
+  }, [props.events]);
   const t = props.thresholds;
  
    return (

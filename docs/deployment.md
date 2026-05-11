@@ -123,7 +123,7 @@ python3 macos/scanner.py --post http://your-backend:8000 --api-key YOUR_KEY --lo
 python windows\scanner.py --post http://your-backend:8000 --api-key YOUR_KEY --loop 120
 ```
 
-The `--api-key` flag is required when the backend has `AUTODEFENSE_API_KEY` configured. Alternatively, set the `AUTODEFENSE_API_KEY` environment variable. The scanner also signs payloads with HMAC-SHA256 if `AUTODEFENSE_SCANNER_HMAC_KEY` is set.
+The `--api-key` flag (or `AUTODEFENSE_API_KEY` in the environment) is required whenever the backend is configured with an API key (including any non-`local` deployment, where the key is mandatory at startup). Pass `--hmac-key` or set `SCANNER_HMAC_KEY` / align with backend `AUTODEFENSE_SCANNER_HMAC_KEY` so payloads are signed with HMAC-SHA256. Outside `local`, the backend rejects `POST /scan/kernel` with **503** if the scanner HMAC key is not configured, so scanners must use the shared secret there.
 
 ### Cron (Linux/macOS)
 
@@ -174,22 +174,22 @@ Register-ScheduledTask -TaskName "AutoDefenseScanner" -Action $action -Trigger $
 ### Security
 
 - **Never expose Redis** to the public internet — it should only be accessible within the Docker network
-- **Set `AUTODEFENSE_API_KEY`** — without it, all endpoints are unauthenticated (the start script auto-generates one)
+- **Set `AUTODEFENSE_API_KEY`** — required whenever `AUTODEFENSE_ENVIRONMENT` is not `local` (startup fails otherwise). In `local`, the start script can auto-generate a key; leaving it empty keeps the API unauthenticated with a startup warning
 - **Use HTTPS** in production — put a reverse proxy (nginx, Caddy, Traefik) in front of the backend; HSTS headers are automatically added for HTTPS connections
 - **Rotate encryption keys** periodically — update `AUTODEFENSE_DATA_KEY_B64` and `AUTODEFENSE_TRANSPORT_KEY_B64`; note that existing encrypted data in Redis will become unreadable after rotation
 - **Restrict CORS origins** — set `AUTODEFENSE_CORS_ORIGINS` to your actual frontend domain(s)
 - **Run scanners with least privilege** — they work as unprivileged users for most checks (root recommended only for full Linux visibility)
-- **Set `AUTODEFENSE_ENVIRONMENT`** to something other than `local` in production — this disables Swagger/ReDoc and redacts platform info from `/health`
+- **Set `AUTODEFENSE_ENVIRONMENT`** to a non-local value in production (any string that does not normalize to `local`, trimmed and case-insensitive) — disables Swagger/ReDoc and redacts detailed platform info from `/health`
 
 ### Scaling
 
 - The backend is stateless (Redis is the only state) — it can be horizontally scaled behind a load balancer
-- Rate limiting is per-instance in-memory (LRU-bounded at 10,000 clients) — use a Redis-backed rate limiter for multi-instance deployments
+- Rate limiting is **Redis-backed** (shared per IP across workers); an in-process fallback applies only if Redis errors — monitor Redis availability in multi-instance setups
 - Redis Streams handle high throughput — the stream is trimmed to ~5,000 entries; forensic records keep the last 1,000
 
 ### Monitoring
 
-- `GET /health` — returns backend status, Redis connectivity, and platform info
+- `GET /health` — returns backend status, Redis connectivity, and platform info (full detail only when the environment is `local`)
 - `GET /metrics` — returns event counts by type
 - Docker healthchecks are configured for all services
 - WebSocket auto-reconnects with exponential backoff (1s to 30s)

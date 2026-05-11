@@ -30,6 +30,11 @@ logger = logging.getLogger("autodefense.kernel")
 KERNEL_STATUS_KEY = "autodefense:kernel_status:v1"
 
 
+def _kernel_ingest_requires_scanner_hmac() -> bool:
+    """Outside local, kernel ingest must be HMAC-authenticated (no unsigned fallback)."""
+    return not settings.is_local
+
+
 def _verify_hmac(body_bytes: bytes, signature: str | None) -> None:
     """Verify HMAC-SHA256 signature from scanner. Skips if HMAC key is not configured."""
     if not settings.scanner_hmac_key:
@@ -50,6 +55,11 @@ async def scan_kernel(
     redis=Depends(get_redis),
     x_scanner_signature: str | None = Header(default=None),
 ):
+    if _kernel_ingest_requires_scanner_hmac() and not settings.scanner_hmac_key:
+        raise HTTPException(
+            status_code=503,
+            detail="AUTODEFENSE_SCANNER_HMAC_KEY must be set to accept kernel scans outside local.",
+        )
     raw_body = await request.body()
     if settings.scanner_hmac_key:
         _verify_hmac(raw_body, x_scanner_signature)

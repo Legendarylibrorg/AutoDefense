@@ -33,12 +33,6 @@ class Settings(BaseSettings):
     # proxies). Only enable when clients cannot reach the app except via trusted proxies.
     trusted_proxy_hops: int = 0
 
-    # Optional LLM classification (OFF by default; system remains fully runnable without it)
-    llm_enabled: bool = False
-    llm_provider: str = "none"
-    llm_api_key: str | None = None
-    llm_model: str = "gpt-4.1-mini"
-
     # Risk thresholds
     risk_allow_max: int = 30
     risk_monitor_max: int = 60
@@ -63,6 +57,11 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def is_local(self) -> bool:
+        """True when AUTODEFENSE_ENVIRONMENT normalizes to ``local`` (trimmed, case-insensitive)."""
+        return self.environment.strip().lower() == "local"
 
 
 settings = Settings()

@@ -73,6 +73,8 @@ export type KernelFinding = {
 
 export type KernelStatus = {
   scanned: boolean;
+  /** True when stored status exists but could not be decrypted (e.g. key mismatch). */
+  kernel_status_unavailable?: boolean;
   platform?: string;
   kernel_version?: string;
   hostname?: string;

@@ -55,3 +55,10 @@ async def test_put_config_accepts_and_versions(client):
     body = res.json()
     assert body["version"] >= old_v + 1
     assert body["risk_allow_max"] == 10
+
+
+def test_settings_is_local_normalizes_environment(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "  LOCAL  ")
+    assert settings.is_local is True
+    monkeypatch.setattr(settings, "environment", "development")
+    assert settings.is_local is False

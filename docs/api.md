@@ -115,6 +115,10 @@ Double-layer encrypted version of `/scan`. Same v2 envelope format as `/analyze/
 
 Accept a host security scan payload from any platform scanner.
 
+When `AUTODEFENSE_SCANNER_HMAC_KEY` is set, the request must include header `X-Scanner-Signature: hex(HMAC-SHA256(raw_body))` using the same key material as the host scanners (see [Scanners](scanners.md)). The signature is verified on the **raw** body bytes before JSON parsing.
+
+If the environment is **not** `local` (trimmed, case-insensitive) and the scanner HMAC key is **unset**, this endpoint returns **503** so unsigned kernel ingest cannot be accepted in deployed-like configurations.
+
 **Request body:**
 
 ```json
@@ -155,7 +159,7 @@ Accept a host security scan payload from any platform scanner.
 
 ### GET /kernel/status
 
-Returns the most recent host security scan summary (decrypted from Redis).
+Returns the most recent host security scan summary (decrypted from Redis). If ciphertext is missing, corrupt, or cannot be decrypted (wrong key or tampering), the response includes `scanned: false` and may set `kernel_status_unavailable: true` instead of returning partial or misleading scan data.
 
 ### GET /events
 
@@ -179,9 +183,9 @@ Returns event counts by type and Redis health status.
 
 ### GET /health
 
-Returns system health including Redis connectivity and full platform auto-detection.
+Returns system health including Redis connectivity and platform auto-detection. When `AUTODEFENSE_ENVIRONMENT` normalizes to `local` (trimmed, case-insensitive), the `platform` object includes full detail (`hostname`, `python_version`, etc.). Outside `local`, sensitive fields are **redacted**; only coarse fields such as `os` remain.
 
-**Response:**
+**Response (example shape in `local`):**
 
 ```json
 {
@@ -230,7 +234,9 @@ Validation rules:
 
 ## Authentication
 
-All endpoints except `/health`, `/docs`, `/openapi.json`, and `/redoc` require authentication.
+Public HTTP paths (no API key): `/health`, `/docs`, `/openapi.json`, `/redoc`.
+
+When `AUTODEFENSE_API_KEY` is configured, every **other** HTTP route requires `Authorization: Bearer <api_key>`. Outside `local`, the backend refuses to start without an API key, so deployed instances always enforce this. In `local` with no key, routes stay open and a startup warning is logged.
 
 | Transport | Method |
 |-----------|--------|
@@ -241,15 +247,17 @@ API key comparison uses `hmac.compare_digest()` (constant-time) to prevent timin
 
 ## Rate limiting
 
-All authenticated endpoints are rate-limited at 120 requests per minute per client IP with a sliding window. The rate limiter uses an LRU-bounded `OrderedDict` (max 10,000 clients) to prevent memory exhaustion. Exceeding the limit returns `429 Too Many Requests` with a `Retry-After` header.
+Non-public routes share a **fixed-window** limit of **120 requests per 60 seconds** per client IP, backed by **Redis** (`INCR` + `EXPIRE`) so multiple workers or replicas share one counter. If Redis errors, the middleware falls back to an in-process counter with a **lower** cap. Exceeding the limit returns **429** with a `Retry-After` header. Client IP selection respects `AUTODEFENSE_TRUSTED_PROXY_HOPS` when set (see [Configuration](configuration.md)).
 
 ## Error responses
 
 | Status | Meaning |
 |--------|---------|
 | 400 | Invalid request body, failed to unseal payload, or malformed `Content-Length` |
-| 401 | Missing or invalid API key |
+| 401 | Missing or invalid API key, or missing `X-Scanner-Signature` when the scanner HMAC key is configured |
+| 403 | Invalid scanner HMAC signature |
 | 413 | Request body exceeds 10 MB limit |
-| 422 | Pydantic validation error (field too long, invalid type, etc.) |
+| 422 | Request validation failed; detailed field errors are returned only when the environment is `local`, otherwise a generic message |
 | 429 | Rate limit exceeded |
+| 503 | Service misconfiguration (e.g. `POST /scan/kernel` with no `AUTODEFENSE_SCANNER_HMAC_KEY` outside `local`) |
 | 500 | Internal server error |

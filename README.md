@@ -50,8 +50,8 @@ This copies `.env.example` to `.env`, auto-generates encryption keys and API key
 | URL | What |
 |-----|------|
 | http://localhost:3000 | Dashboard |
-| http://localhost:8000/docs | API docs (Swagger) |
-| http://localhost:8000/health | Health + platform info |
+| http://localhost:8000/docs | API docs (Swagger) — served only when `AUTODEFENSE_ENVIRONMENT` normalizes to `local` |
+| http://localhost:8000/health | Health + Redis status; full platform detail only in `local` |
 
 ## What it defends against
 

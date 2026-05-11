@@ -10,7 +10,7 @@ from typing import Any
 
 from redis.asyncio import Redis
 
-from app.core.crypto import CryptoManager
+from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
 from app.settings import settings
 
 logger = logging.getLogger("autodefense.config_store")
@@ -123,7 +123,7 @@ class ConfigStore:
             raw = raw.decode("utf-8", errors="replace")
         data = json.loads(raw)
         # encrypted envelope support
-        if isinstance(data, dict) and data.get("alg") in ("AES-256-GCM", "none"):
+        if isinstance(data, dict) and data.get("alg") in STORE_ENVELOPE_ALGS:
             data = self.crypto.decrypt_json(data, aad=b"runtime_config")
         d = self.defaults()
         return RuntimeConfig(

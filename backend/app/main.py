@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import ipaddress
 import hmac
 import logging
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
 
@@ -19,6 +21,63 @@ from app.core.redis_client import close_pool, get_redis
 from app.settings import settings
 
 PUBLIC_PATHS = frozenset({"/health", "/docs", "/openapi.json", "/redoc"})
+
+_PRODUCTION_LIKE_ENVS = frozenset({"production", "staging", "prod"})
+
+
+def _client_host_for_rate_limit(request: Request) -> str:
+    """Client IP for rate limiting. Use X-Forwarded-For only when trusted_proxy_hops > 0."""
+    direct = request.client.host if request.client else "unknown"
+    if settings.trusted_proxy_hops <= 0:
+        return direct
+    xff = request.headers.get("x-forwarded-for")
+    if not xff or not xff.strip():
+        return direct
+    first = xff.split(",")[0].strip()
+    if not first:
+        return direct
+    host = first.split("%", 1)[0].strip()
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return direct
+    return host
+
+
+# In-process fixed-window fallback when Redis is unavailable (stricter cap than Redis path).
+_mem_lock = threading.Lock()
+_mem_counts: dict[tuple[str, int], int] = {}
+
+
+def _memory_rate_limit_allow(client: str, bucket: int, limit: int) -> bool:
+    key = (client, bucket)
+    with _mem_lock:
+        n = _mem_counts.get(key, 0) + 1
+        _mem_counts[key] = n
+        if len(_mem_counts) > 50_000:
+            cut = bucket - 2
+            for k in list(_mem_counts.keys()):
+                if k[1] < cut:
+                    del _mem_counts[k]
+                if len(_mem_counts) <= 40_000:
+                    break
+        return n <= limit
+
+
+def _enforce_production_secrets() -> None:
+    """Fail closed in deployed environments: require shared secrets at startup."""
+    if settings.environment.strip().lower() not in _PRODUCTION_LIKE_ENVS:
+        return
+    if not settings.api_key:
+        raise RuntimeError(
+            "AUTODEFENSE_API_KEY is required when AUTODEFENSE_ENVIRONMENT is "
+            "production, staging, or prod."
+        )
+    if not settings.scanner_hmac_key:
+        raise RuntimeError(
+            "AUTODEFENSE_SCANNER_HMAC_KEY is required when AUTODEFENSE_ENVIRONMENT is "
+            "production, staging, or prod."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -103,20 +162,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
 class RedisRateLimitMiddleware(BaseHTTPMiddleware):
     """
     Per-IP fixed-window counter in Redis so multiple uvicorn workers or replicas
-    share one limit. On Redis errors we fail open (allow) so availability is not
-    tied to Redis being reachable mid-request.
+    share one limit. If Redis errors, fall back to an in-process counter with a
+    lower limit so abuse cannot bypass throttling entirely.
     """
 
     def __init__(self, app, *, max_requests: int = 120, window_seconds: int = 60):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
+        self._fallback_limit = max(1, max_requests // 2)
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 
-        client = request.client.host if request.client else "unknown"
+        client = _client_host_for_rate_limit(request)
         bucket = int(time.time()) // self.window_seconds
         key = f"autodefense:ratelimit:v1:{client}:{bucket}"
 
@@ -133,10 +193,16 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
                 )
         except Exception as exc:
             logging.getLogger("autodefense").warning(
-                "Rate limit check failed; allowing request (%s)",
+                "Rate limit Redis check failed; using in-memory fallback (%s)",
                 exc,
-                extra={"event_type": "ratelimit", "action": "redis_fallback"},
+                extra={"event_type": "ratelimit", "action": "memory_fallback"},
             )
+            if not _memory_rate_limit_allow(client, bucket, self._fallback_limit):
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Rate limit exceeded. Try again later."},
+                    headers={"Retry-After": str(self.window_seconds)},
+                )
 
         return await call_next(request)
 
@@ -165,6 +231,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 def create_app() -> FastAPI:
     configure_logging(settings.log_level)
+    _enforce_production_secrets()
     logger = logging.getLogger("autodefense")
 
     if settings.data_encryption_enabled and not settings.data_key_b64:

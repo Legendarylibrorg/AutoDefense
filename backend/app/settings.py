@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # CORS allowed origins (comma-separated for env var).
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # When > 0, rate limiting uses the leftmost address in X-Forwarded-For (append-style
+    # proxies). Only enable when clients cannot reach the app except via trusted proxies.
+    trusted_proxy_hops: int = 0
+
     # Optional LLM classification (OFF by default; system remains fully runnable without it)
     llm_enabled: bool = False
     llm_provider: str = "none"

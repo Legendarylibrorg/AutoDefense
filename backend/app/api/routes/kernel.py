@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from app.agents.kernel import KernelAgent
-from app.core.crypto import CryptoManager
+from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
 from app.core.event_bus import EventBus
 from app.core.models import (
     DecisionAction,
@@ -138,7 +138,7 @@ async def kernel_status(redis=Depends(get_redis)) -> dict:
     if isinstance(raw, (bytes, bytearray)):
         raw = raw.decode("utf-8", errors="replace")
     data = json.loads(raw)
-    if isinstance(data, dict) and data.get("alg") in ("AES-256-GCM", "none"):
+    if isinstance(data, dict) and data.get("alg") in STORE_ENVELOPE_ALGS:
         crypto = CryptoManager(settings.data_key_b64 if settings.data_encryption_enabled else None)
         data = crypto.decrypt_json(data, aad=b"kernel_status")
     data["scanned"] = True

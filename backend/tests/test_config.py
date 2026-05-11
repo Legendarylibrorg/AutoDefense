@@ -1,5 +1,28 @@
 from __future__ import annotations
 
+import base64
+import os
+
+from fakeredis.aioredis import FakeRedis
+
+from app.core.config_store import ConfigStore
+from app.settings import settings
+
+
+async def test_runtime_config_survives_v2_encrypted_roundtrip(monkeypatch: pytest.MonkeyPatch):
+    key_b64 = base64.b64encode(os.urandom(32)).decode()
+    monkeypatch.setattr(settings, "data_encryption_enabled", True)
+    monkeypatch.setattr(settings, "data_key_b64", key_b64)
+
+    redis = FakeRedis()
+    store = ConfigStore(redis)
+    cfg = store.defaults()
+    cfg.risk_allow_max = 77
+    await store.save(cfg)
+
+    loaded = await store.load()
+    assert loaded.risk_allow_max == 77
+
 
 async def test_get_config(client):
     res = await client.get("/config")

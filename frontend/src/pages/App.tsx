@@ -8,6 +8,7 @@ import { EventFeed } from "../components/EventFeed";
 import { KernelHealth } from "../components/KernelHealth";
 import { RiskChart } from "../components/RiskChart";
 import { StatCard } from "../components/StatCard";
+import { ConnectionCredentials } from "../components/ConnectionCredentials";
 
 function classifyAction(type: string): "allow" | "log_monitor" | "sanitize" | "block_isolate" | "unknown" {
   if (!type.startsWith("decision.")) return "unknown";
@@ -108,6 +109,7 @@ export function App() {
               />
               <div className="text-sm text-muted">{connected ? "Live" : "Reconnecting…"}</div>
             </div>
+            <ConnectionCredentials />
           </div>
         </div>
       </header>

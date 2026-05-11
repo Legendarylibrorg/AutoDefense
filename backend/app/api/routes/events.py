@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from app.core.event_bus import EventBus
 from app.core.redis_client import get_redis
+from app.core.ws_auth import parse_ws_auth_protocol
 from app.settings import settings
 
 router = APIRouter()
@@ -61,12 +62,7 @@ async def events_ws(ws: WebSocket, redis=Depends(get_redis)):
         await ws.close(code=1013, reason="Connection limit reached")
         return
 
-    subprotocol = None
-    for proto in (ws.headers.get("sec-websocket-protocol") or "").split(","):
-        p = proto.strip()
-        if p.startswith("auth."):
-            subprotocol = p
-            break
+    subprotocol, _ = parse_ws_auth_protocol(ws.headers.get("sec-websocket-protocol"))
     await ws.accept(subprotocol=subprotocol)
     _active_ws.add(ws)
     bus = EventBus(redis)

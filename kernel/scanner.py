@@ -2,12 +2,11 @@
 """
 AUTO DEFENSE — Linux Kernel Scanner (Linux only)
 
-Standalone zero-dependency script (stdlib only) that detects rootkits,
-zero-day exploitation indicators, kernel integrity violations, network
-sniffers, and ARP spoofing by reading /proc, /sys, and the filesystem.
-Posts findings to the AUTO DEFENSE backend then exits.
+Reads /proc, /sys, and the filesystem for rootkit and integrity indicators.
+Requires this repository's ``scanners/`` package (run from repo root or keep
+``scanners/`` next to this script). Posts findings to the AUTO DEFENSE backend.
 
-For macOS use macos/scanner.py.  For Windows use windows/scanner.py.
+For macOS use macos/scanner.py. For Windows use windows/scanner.py.
 
 Usage:
     python3 scanner.py                          # scan + print JSON
@@ -32,25 +31,10 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-# ---------------------------------------------------------------------------
-# Finding helpers
-# ---------------------------------------------------------------------------
-
-def finding(
-    category: str,
-    severity: str,
-    title: str,
-    detail: str,
-    evidence: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    return {
-        "category": category,
-        "severity": severity,
-        "title": title,
-        "detail": detail,
-        "evidence": evidence or {},
-    }
-
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+from scanners.finding import finding  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Rootkit detection

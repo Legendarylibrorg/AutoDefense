@@ -4,6 +4,7 @@ from collections import Counter
 from typing import Any
 
 from app.core.models import AgentSignal, AnalyzeRequest
+from app.core.response_engine import risk_score_to_decision_action
 from app.core.risk import aggregate_risk
 
 
@@ -33,14 +34,12 @@ class CoordinatorAgent:
         monitor_max = int(t.get("risk_monitor_max", 60))
         sanitize_max = int(t.get("risk_sanitize_max", 80))
 
-        if risk <= allow_max:
-            action = "allow"
-        elif risk <= monitor_max:
-            action = "log_monitor"
-        elif risk <= sanitize_max:
-            action = "sanitize"
-        else:
-            action = "block_isolate"
+        action = risk_score_to_decision_action(
+            risk,
+            risk_allow_max=allow_max,
+            risk_monitor_max=monitor_max,
+            risk_sanitize_max=sanitize_max,
+        ).value
 
         explain_out = {
             "risk": risk,

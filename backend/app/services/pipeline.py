@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -11,10 +12,11 @@ from app.agents.coordinator import CoordinatorAgent
 from app.agents.forensics import ForensicsAgent
 from app.agents.policy import PolicyAgent
 from app.agents.sentinel import SentinelAgent
-from app.core.config_store import ConfigStore
+from app.core.config_store import ConfigStore, risk_thresholds, runtime_policy_for_agents
 from app.core.event_bus import EventBus
-from app.core.models import AnalyzeRequest, AnalyzeResponse, Event
-from app.core.response_engine import ResponseEngine
+from app.core.models import AnalyzeRequest, AnalyzeResponse, Event, ScanRequest, ScanResponse
+from app.core.response_engine import ResponseEngine, risk_score_to_decision_action
+from app.core.risk import aggregate_risk
 from app.core.rules_store import RulesStore
 from app.core.self_heal import SelfHealingEngine
 
@@ -38,15 +40,8 @@ class DefensePipeline:
     async def run(self, req: AnalyzeRequest) -> AnalyzeResponse:
         cfg_store = ConfigStore(self.redis)
         cfg = await cfg_store.load()
-        runtime_policy = {
-            "blocked_input_regexes": cfg.blocked_input_regexes,
-            "sanitize_input_regexes": cfg.sanitize_input_regexes,
-        }
-        thresholds = {
-            "risk_allow_max": cfg.risk_allow_max,
-            "risk_monitor_max": cfg.risk_monitor_max,
-            "risk_sanitize_max": cfg.risk_sanitize_max,
-        }
+        runtime_policy = runtime_policy_for_agents(cfg)
+        thresholds = risk_thresholds(cfg)
 
         await self.bus.publish(
             Event(
@@ -63,14 +58,16 @@ class DefensePipeline:
 
         dynamic_rules = await RulesStore(self.redis).load()
 
-        artifact = await self.artifact.analyze(req.artifacts)
-        sentinel = await self.sentinel.analyze(req, dynamic=dynamic_rules)
+        artifact, sentinel, behavior = await asyncio.gather(
+            self.artifact.analyze(req.artifacts),
+            self.sentinel.analyze(req, dynamic=dynamic_rules),
+            self.behavior.analyze(req),
+        )
         policy = await self.policy.analyze(
             req,
             sentinel_sanitized_input=sentinel["sanitized_input"],
             runtime_policy=runtime_policy,
         )
-        behavior = await self.behavior.analyze(req)
 
         signals = (
             artifact["signals"] + policy["signals"] + sentinel["signals"] + behavior["signals"]
@@ -124,3 +121,46 @@ class DefensePipeline:
         )
 
         return response
+
+    async def scan(self, req: ScanRequest) -> ScanResponse:
+        cfg = await ConfigStore(self.redis).load()
+        thresholds = risk_thresholds(cfg)
+
+        await self.bus.publish(
+            Event(
+                type="scan.received",
+                trace_id=req.trace_id,
+                session_id=req.session_id,
+                payload={"artifacts": len(req.artifacts)},
+            )
+        )
+
+        out = await self.artifact.analyze(req.artifacts)
+        signals = out["signals"]
+        risk, explain = aggregate_risk(signals)
+        explain["artifact_summary"] = out.get("artifact_summary", [])
+
+        action = risk_score_to_decision_action(
+            risk,
+            risk_allow_max=int(thresholds["risk_allow_max"]),
+            risk_monitor_max=int(thresholds["risk_monitor_max"]),
+            risk_sanitize_max=int(thresholds["risk_sanitize_max"]),
+        )
+
+        await self.bus.publish(
+            Event(
+                type=f"scan.decision.{action.value}",
+                trace_id=req.trace_id,
+                session_id=req.session_id,
+                payload={"risk_score": risk},
+            )
+        )
+
+        return ScanResponse(
+            session_id=req.session_id,
+            trace_id=req.trace_id,
+            risk_score=risk,
+            action=action,
+            explain=explain,
+            signals=signals,
+        )

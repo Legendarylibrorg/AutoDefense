@@ -17,7 +17,9 @@ class SelfHealingEngine:
         self.bus = EventBus(redis)
         self.store = RulesStore(redis)
 
-    def _build_patches(self, dyn: DynamicRules, req: AnalyzeRequest, decision: dict[str, Any]) -> list[dict[str, Any]]:
+    def _build_patches(
+        self, dyn: DynamicRules, req: AnalyzeRequest, decision: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         patches: list[dict[str, Any]] = []
         threats = decision.get("explain", {}).get("threat_types", [])
         text = (req.user_input or "")[:2000]
@@ -74,7 +76,9 @@ class SelfHealingEngine:
                     }
                 )
 
-        dyn.injection_regex_append = dyn.injection_regex_append[: settings.self_heal_max_rule_growth]
+        dyn.injection_regex_append = dyn.injection_regex_append[
+            : settings.self_heal_max_rule_growth
+        ]
         dyn.exfil_regex_append = dyn.exfil_regex_append[: settings.self_heal_max_rule_growth]
         return patches
 

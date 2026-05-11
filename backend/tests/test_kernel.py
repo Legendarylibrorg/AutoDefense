@@ -202,7 +202,9 @@ async def test_kernel_status_decrypt_failure_not_marked_scanned(
     assert data.get("kernel_status_unavailable") is True
 
 
-async def test_kernel_scan_rejected_outside_local_without_scanner_hmac(monkeypatch: pytest.MonkeyPatch):
+async def test_kernel_scan_rejected_outside_local_without_scanner_hmac(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.setattr(settings, "environment", "development")
     monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
     monkeypatch.setattr(settings, "scanner_hmac_key", None)

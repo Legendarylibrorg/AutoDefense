@@ -77,4 +77,3 @@ class EventBus:
                         logger.warning(
                             "Failed to decode streamed event", extra={"event_type": "decode_error"}
                         )
-

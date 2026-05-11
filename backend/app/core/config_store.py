@@ -102,7 +102,9 @@ class ConfigStore:
     def __init__(self, redis: Redis):
         self.redis = redis
         self._baseline = _get_baseline_policy()
-        self.crypto = CryptoManager(settings.data_key_b64 if settings.data_encryption_enabled else None)
+        self.crypto = CryptoManager(
+            settings.data_key_b64 if settings.data_encryption_enabled else None
+        )
 
     def defaults(self) -> RuntimeConfig:
         return RuntimeConfig(
@@ -132,8 +134,12 @@ class ConfigStore:
             risk_monitor_max=int(data.get("risk_monitor_max", d.risk_monitor_max)),
             risk_sanitize_max=int(data.get("risk_sanitize_max", d.risk_sanitize_max)),
             self_heal_enabled=bool(data.get("self_heal_enabled", d.self_heal_enabled)),
-            blocked_input_regexes=_filter_safe_regexes(data.get("blocked_input_regexes", d.blocked_input_regexes)),
-            sanitize_input_regexes=_filter_safe_regexes(data.get("sanitize_input_regexes", d.sanitize_input_regexes)),
+            blocked_input_regexes=_filter_safe_regexes(
+                data.get("blocked_input_regexes", d.blocked_input_regexes)
+            ),
+            sanitize_input_regexes=_filter_safe_regexes(
+                data.get("sanitize_input_regexes", d.sanitize_input_regexes)
+            ),
         )
 
     def validate(self, cfg: RuntimeConfig) -> list[str]:
@@ -184,4 +190,3 @@ class ConfigStore:
         }
         wrapped = self.crypto.encrypt_json(payload, aad=b"runtime_config")
         await self.redis.set(self.KEY, json.dumps(wrapped, ensure_ascii=False))
- 

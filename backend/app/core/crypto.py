@@ -81,7 +81,9 @@ class CryptoManager:
     # ------------------------------------------------------------------
 
     def encrypt_json(self, obj: dict[str, Any], *, aad: bytes = b"") -> dict[str, Any]:
-        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode(
+            "utf-8"
+        )
         digest = sha256_hex(raw)
 
         if not self.enabled:

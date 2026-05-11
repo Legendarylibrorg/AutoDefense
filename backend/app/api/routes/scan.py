@@ -75,7 +75,8 @@ class SealedScanRequest(BaseModel):
 async def scan_sealed(body: SealedScanRequest, redis=Depends(get_redis)) -> ScanResponse:
     raw = unseal_to_dict(body.sealed, aad=b"scan")
     if not raw:
-        raise HTTPException(status_code=400, detail="Unable to unseal payload (check transport key/flag).")
+        raise HTTPException(
+            status_code=400, detail="Unable to unseal payload (check transport key/flag)."
+        )
     req = ScanRequest.model_validate(raw)
     return await scan(req=req, redis=redis)
-

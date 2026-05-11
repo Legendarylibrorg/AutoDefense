@@ -67,4 +67,3 @@ class ResponseEngine:
             signals=signals,
             patches=patches,
         )
-

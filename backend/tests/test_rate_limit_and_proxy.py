@@ -1,4 +1,5 @@
 """Rate-limit fallback and trusted proxy client IP extraction."""
+
 from __future__ import annotations
 
 import time

@@ -55,4 +55,3 @@ async def put_config(body: ConfigDTO, redis=Depends(get_redis)) -> Any:
     )
 
     return ConfigDTO(**incoming.__dict__)
-

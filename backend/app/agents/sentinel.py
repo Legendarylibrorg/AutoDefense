@@ -22,6 +22,7 @@ def _normalize_text(text: str) -> str:
     out = re.sub(r"\s+", " ", out)
     return out
 
+
 # ---------------------------------------------------------------------------
 # Prompt injection patterns (OWASP LLM01)
 # ---------------------------------------------------------------------------
@@ -151,7 +152,9 @@ def _detect_encoding_evasion(text: str) -> tuple[float, list[str]]:
         reasons.append(f"Zero-width characters detected ({zw_chars}) — token fragmentation attempt")
 
     # Char-by-char spelling (i-g-n-o-r-e)
-    if re.search(r"[a-z][\s\-_.]{1,3}[a-z][\s\-_.]{1,3}[a-z][\s\-_.]{1,3}[a-z][\s\-_.]{1,3}[a-z]", text, re.I):
+    if re.search(
+        r"[a-z][\s\-_.]{1,3}[a-z][\s\-_.]{1,3}[a-z][\s\-_.]{1,3}[a-z][\s\-_.]{1,3}[a-z]", text, re.I
+    ):
         collapsed = re.sub(r"[\s\-_.]+", "", text.lower())
         for keyword in ("ignore", "bypass", "override", "system", "prompt", "jailbreak"):
             if keyword in collapsed:
@@ -178,7 +181,9 @@ class SentinelAgent:
     def __init__(self):
         pass
 
-    async def analyze(self, req: AnalyzeRequest, dynamic: DynamicRules | None = None) -> dict[str, Any]:
+    async def analyze(
+        self, req: AnalyzeRequest, dynamic: DynamicRules | None = None
+    ) -> dict[str, Any]:
         text = req.user_input or ""
         normalized = _normalize_text(text)
         inj = BASE_INJECTION_REGEXES + (dynamic.injection_regex_append if dynamic else [])

@@ -71,7 +71,9 @@ def test_crypto_v1_rejects_missing_sha256():
     key = os.urandom(32)
     key_b64 = base64.b64encode(key).decode("ascii")
     c = CryptoManager(key_b64)
-    raw = json.dumps({"a": 1}, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    raw = json.dumps({"a": 1}, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode(
+        "utf-8"
+    )
     nonce = os.urandom(12)
     ct = AESGCM(key).encrypt(nonce, raw, b"ctx")
     env = {
@@ -81,4 +83,3 @@ def test_crypto_v1_rejects_missing_sha256():
         "ct_b64": base64.b64encode(ct).decode("ascii"),
     }
     assert c.decrypt_json(env, aad=b"ctx") == {}
-

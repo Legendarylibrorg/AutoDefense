@@ -64,7 +64,9 @@ class RulesStore:
 
     def __init__(self, redis: Redis):
         self.redis = redis
-        self.crypto = CryptoManager(settings.data_key_b64 if settings.data_encryption_enabled else None)
+        self.crypto = CryptoManager(
+            settings.data_key_b64 if settings.data_encryption_enabled else None
+        )
 
     async def load(self) -> DynamicRules:
         raw = await self.redis.get(self.KEY)
@@ -89,4 +91,3 @@ class RulesStore:
         }
         wrapped = self.crypto.encrypt_json(payload, aad=b"dynamic_rules")
         await self.redis.set(self.KEY, json.dumps(wrapped, ensure_ascii=False))
-

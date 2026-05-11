@@ -66,8 +66,14 @@ def aggregate_risk(
         tt = s.threat_type.value
         if tt in ("policy_violation", "malware_in_file", "rootkit"):
             floors = max(floors, 50.0)
-        if tt in ("prompt_injection", "jailbreak", "kernel_exploit", "kernel_integrity",
-                   "tool_abuse", "data_exfiltration"):
+        if tt in (
+            "prompt_injection",
+            "jailbreak",
+            "kernel_exploit",
+            "kernel_integrity",
+            "tool_abuse",
+            "data_exfiltration",
+        ):
             # Align with policy_violation/malware floors so clear LLM threats exceed
             # default monitor band (≤60) and trigger sanitize/block + self-heal tests.
             floors = max(floors, 50.0)
@@ -76,4 +82,3 @@ def aggregate_risk(
     risk = clamp_int(total)
     explain = {"contributions": contribs, "strong_signal_bump": bump, "threat_floor_bump": floors}
     return risk, explain
- 

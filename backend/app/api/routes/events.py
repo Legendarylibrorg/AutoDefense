@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
@@ -32,7 +31,7 @@ async def stream_events(redis=Depends(get_redis)):
     global _active_sse
     if _active_sse >= _MAX_STREAMING:
         return StreamingResponse(
-            iter(["data: {\"error\": \"connection limit reached\"}\n\n"]),
+            iter(['data: {"error": "connection limit reached"}\n\n']),
             media_type="text/event-stream",
             status_code=503,
         )
@@ -48,7 +47,7 @@ async def stream_events(redis=Depends(get_redis)):
             async for e in bus.stream_events():
                 yield f"data: {json.dumps(e.model_dump(mode='json'))}\n\n"
                 if time.monotonic() - start > timeout:
-                    yield "data: {\"event\": \"timeout\"}\n\n"
+                    yield 'data: {"event": "timeout"}\n\n'
                     break
         finally:
             _active_sse -= 1

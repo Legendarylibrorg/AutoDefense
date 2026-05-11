@@ -17,7 +17,9 @@ class SelfHealingEngine:
         self.bus = EventBus(redis)
         self.store = RulesStore(redis)
 
-    async def ingest_incident(self, *, req: AnalyzeRequest, decision: dict[str, Any]) -> dict[str, Any]:
+    async def ingest_incident(
+        self, *, req: AnalyzeRequest, decision: dict[str, Any]
+    ) -> dict[str, Any]:
         if not settings.self_heal_enabled:
             return {"patches": []}
 
@@ -44,47 +46,57 @@ class SelfHealingEngine:
             suggested = self._suggest_injection_regex(text)
             if suggested and suggested not in dyn.injection_regex_append:
                 dyn.injection_regex_append.append(suggested)
-                patches.append({
-                    "type": "guardrail_update",
-                    "issue": "prompt injection",
-                    "fix": "block instruction-override pattern",
-                    "implementation": {"append_regex": suggested},
-                })
+                patches.append(
+                    {
+                        "type": "guardrail_update",
+                        "issue": "prompt injection",
+                        "fix": "block instruction-override pattern",
+                        "implementation": {"append_regex": suggested},
+                    }
+                )
 
         if ThreatType.jailbreak.value in threats:
             suggested = self._suggest_jailbreak_regex(text)
             if suggested and suggested not in dyn.injection_regex_append:
                 dyn.injection_regex_append.append(suggested)
-                patches.append({
-                    "type": "guardrail_update",
-                    "issue": "jailbreak",
-                    "fix": "block jailbreak persona pattern",
-                    "implementation": {"append_regex": suggested},
-                })
+                patches.append(
+                    {
+                        "type": "guardrail_update",
+                        "issue": "jailbreak",
+                        "fix": "block jailbreak persona pattern",
+                        "implementation": {"append_regex": suggested},
+                    }
+                )
 
         if ThreatType.data_exfiltration.value in threats:
             suggested = self._suggest_exfil_regex(text)
             if suggested and suggested not in dyn.exfil_regex_append:
                 dyn.exfil_regex_append.append(suggested)
-                patches.append({
-                    "type": "guardrail_update",
-                    "issue": "data exfiltration",
-                    "fix": "block exfiltration prompt pattern",
-                    "implementation": {"append_regex": suggested},
-                })
+                patches.append(
+                    {
+                        "type": "guardrail_update",
+                        "issue": "data exfiltration",
+                        "fix": "block exfiltration prompt pattern",
+                        "implementation": {"append_regex": suggested},
+                    }
+                )
 
         if ThreatType.tool_abuse.value in threats:
             suggested = self._suggest_tool_abuse_regex(text)
             if suggested and suggested not in dyn.injection_regex_append:
                 dyn.injection_regex_append.append(suggested)
-                patches.append({
-                    "type": "guardrail_update",
-                    "issue": "tool abuse / code execution",
-                    "fix": "block dangerous command pattern",
-                    "implementation": {"append_regex": suggested},
-                })
+                patches.append(
+                    {
+                        "type": "guardrail_update",
+                        "issue": "tool abuse / code execution",
+                        "fix": "block dangerous command pattern",
+                        "implementation": {"append_regex": suggested},
+                    }
+                )
 
-        dyn.injection_regex_append = dyn.injection_regex_append[: settings.self_heal_max_rule_growth]
+        dyn.injection_regex_append = dyn.injection_regex_append[
+            : settings.self_heal_max_rule_growth
+        ]
         dyn.exfil_regex_append = dyn.exfil_regex_append[: settings.self_heal_max_rule_growth]
 
         if patches:

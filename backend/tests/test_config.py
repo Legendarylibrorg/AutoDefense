@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import os
 
+import pytest
 from fakeredis.aioredis import FakeRedis
 
 from app.core.config_store import ConfigStore
@@ -54,4 +55,3 @@ async def test_put_config_accepts_and_versions(client):
     body = res.json()
     assert body["version"] >= old_v + 1
     assert body["risk_allow_max"] == 10
-

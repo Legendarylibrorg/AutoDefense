@@ -93,7 +93,9 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         if cl:
             try:
                 if int(cl) > MAX_BODY_BYTES:
-                    return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+                    return JSONResponse(
+                        status_code=413, content={"detail": "Request body too large"}
+                    )
             except (ValueError, OverflowError):
                 return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
         elif request.method in ("POST", "PUT", "PATCH"):
@@ -105,7 +107,9 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
                     continue
                 total += len(chunk)
                 if total > MAX_BODY_BYTES:
-                    return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+                    return JSONResponse(
+                        status_code=413, content={"detail": "Request body too large"}
+                    )
                 chunks.append(chunk)
             request._body = b"".join(chunks)
         return await call_next(request)
@@ -114,6 +118,7 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # API-key authentication (C1 fix)
 # ---------------------------------------------------------------------------
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """
@@ -158,6 +163,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # Rate limiter — Redis fixed-window (shared across workers / replicas)
 # ---------------------------------------------------------------------------
+
 
 class RedisRateLimitMiddleware(BaseHTTPMiddleware):
     """
@@ -211,6 +217,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
 # Security headers
 # ---------------------------------------------------------------------------
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -228,6 +235,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
+
 
 def create_app() -> FastAPI:
     configure_logging(settings.log_level)
@@ -304,10 +312,12 @@ def create_app() -> FastAPI:
     async def _validation_error(_req: Request, exc: RequestValidationError):
         safe_errors = []
         for err in exc.errors():
-            safe_errors.append({
-                "field": " → ".join(str(l) for l in err.get("loc", [])),
-                "message": err.get("msg", "validation error"),
-            })
+            safe_errors.append(
+                {
+                    "field": " → ".join(str(part) for part in err.get("loc", [])),
+                    "message": err.get("msg", "validation error"),
+                }
+            )
         return JSONResponse(status_code=422, content={"detail": safe_errors})
 
     app.include_router(api_router)

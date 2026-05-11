@@ -72,7 +72,9 @@ class DefensePipeline:
         )
         behavior = await self.behavior.analyze(req)
 
-        signals = artifact["signals"] + policy["signals"] + sentinel["signals"] + behavior["signals"]
+        signals = (
+            artifact["signals"] + policy["signals"] + sentinel["signals"] + behavior["signals"]
+        )
 
         decision = await self.coordinator.decide(
             req=req,
@@ -122,4 +124,3 @@ class DefensePipeline:
         )
 
         return response
-

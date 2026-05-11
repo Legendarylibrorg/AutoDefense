@@ -69,7 +69,9 @@ _ID_PATTERN = r"^[a-zA-Z0-9\-_.:]{1,128}$"
 
 
 class AnalyzeRequest(BaseModel):
-    session_id: str = Field(default_factory=lambda: str(uuid4()), max_length=128, pattern=_ID_PATTERN)
+    session_id: str = Field(
+        default_factory=lambda: str(uuid4()), max_length=128, pattern=_ID_PATTERN
+    )
     trace_id: str = Field(default_factory=lambda: str(uuid4()), max_length=128, pattern=_ID_PATTERN)
 
     user_input: str = Field(max_length=50_000)
@@ -103,7 +105,9 @@ class AnalyzeResponse(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    session_id: str = Field(default_factory=lambda: str(uuid4()), max_length=128, pattern=_ID_PATTERN)
+    session_id: str = Field(
+        default_factory=lambda: str(uuid4()), max_length=128, pattern=_ID_PATTERN
+    )
     trace_id: str = Field(default_factory=lambda: str(uuid4()), max_length=128, pattern=_ID_PATTERN)
     artifacts: list[Artifact] = Field(default_factory=list, max_length=50)
     metadata: dict[str, Any] = Field(default_factory=dict)

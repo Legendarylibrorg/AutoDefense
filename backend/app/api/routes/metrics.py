@@ -33,6 +33,7 @@ def _platform_info() -> dict:
     if _platform_cache is not None:
         return _platform_cache
     from app.settings import settings as _settings
+
     plat = platform.system().lower()
     is_local = _settings.environment == "local"
     info: dict = {
@@ -46,13 +47,19 @@ def _platform_info() -> dict:
     }
     if plat == "linux":
         info["kernel_scanner_available"] = True
-        info["scanner_hint"] = "Full kernel protection available — run kernel/scanner.py on this host."
+        info["scanner_hint"] = (
+            "Full kernel protection available — run kernel/scanner.py on this host."
+        )
     elif plat == "darwin":
         info["kernel_scanner_available"] = True
-        info["scanner_hint"] = "macOS security scanner available — run macos/scanner.py on this host."
+        info["scanner_hint"] = (
+            "macOS security scanner available — run macos/scanner.py on this host."
+        )
     elif plat == "windows":
         info["kernel_scanner_available"] = True
-        info["scanner_hint"] = "Windows security scanner available — run windows\\scanner.py on this host."
+        info["scanner_hint"] = (
+            "Windows security scanner available — run windows\\scanner.py on this host."
+        )
     else:
         info["kernel_scanner_available"] = False
         info["scanner_hint"] = "No scanner available for this platform."

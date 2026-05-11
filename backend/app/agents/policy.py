@@ -53,4 +53,3 @@ class PolicyAgent:
             sanitized = re.sub(rx, "[[POLICY_REDACTED]]", sanitized, flags=re.IGNORECASE)
 
         return {"signals": signals, "sanitized_input": sanitized}
- 

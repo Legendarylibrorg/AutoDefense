@@ -25,8 +25,9 @@ class SealedAnalyzeRequest(BaseModel):
 async def analyze_sealed(body: SealedAnalyzeRequest, redis=Depends(get_redis)) -> AnalyzeResponse:
     raw = unseal_to_dict(body.sealed, aad=b"analyze")
     if not raw:
-        raise HTTPException(status_code=400, detail="Unable to unseal payload (check transport key/flag).")
+        raise HTTPException(
+            status_code=400, detail="Unable to unseal payload (check transport key/flag)."
+        )
     req = AnalyzeRequest.model_validate(raw)
     pipeline = DefensePipeline(redis)
     return await pipeline.run(req)
-

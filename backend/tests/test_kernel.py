@@ -95,15 +95,17 @@ async def test_kernel_scan_invalid_hmac_rejected(hmac_client):
 
 
 async def test_kernel_scan_critical_findings_raise_risk(hmac_client):
-    payload = _kernel_payload(findings=[
-        {
-            "category": "rootkit",
-            "severity": "critical",
-            "title": "Known rootkit module loaded: diamorphine",
-            "detail": "The module 'diamorphine' matches a known rootkit LKM.",
-            "evidence": {"module": "diamorphine"},
-        }
-    ])
+    payload = _kernel_payload(
+        findings=[
+            {
+                "category": "rootkit",
+                "severity": "critical",
+                "title": "Known rootkit module loaded: diamorphine",
+                "detail": "The module 'diamorphine' matches a known rootkit LKM.",
+                "evidence": {"module": "diamorphine"},
+            }
+        ]
+    )
     body = json.dumps(payload).encode()
     sig = _sign(body)
     res = await hmac_client.post(

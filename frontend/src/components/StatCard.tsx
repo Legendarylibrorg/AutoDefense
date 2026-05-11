@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
 export function StatCard(props: {
-   title: string;
+  title: string;
   value: ReactNode;
-   hint?: string;
-   tone?: "ok" | "warn" | "danger" | "neutral";
- }) {
-   const tone =
+  hint?: string;
+  tone?: "ok" | "warn" | "danger";
+}) {
+  const tone =
      props.tone === "ok"
        ? "border-ok/30 bg-panel"
        : props.tone === "warn"

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
-import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,48 +9,16 @@ from typing import Any
 from redis.asyncio import Redis
 
 from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
+from app.core.regex_safety import regex_safety_error
 from app.settings import settings
 
 logger = logging.getLogger("autodefense.config_store")
-
-_RE_PROBE = "a" * 50 + "!" + "a" * 50
-
-
-def _regex_probe_timed(pattern: str) -> bool:
-    """Return True if ``re.search`` on a worst-case probe finishes within ~0.5s."""
-    ok: list[bool] = [True]
-
-    def _run() -> None:
-        try:
-            re.search(pattern, _RE_PROBE, flags=re.IGNORECASE)
-        except Exception:
-            ok[0] = False
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=0.5)
-    if t.is_alive():
-        return False
-    return ok[0]
-
-
-def _is_safe_regex(pattern: str) -> bool:
-    """Compilable, no nested quantifiers, and no ReDoS on probe."""
-    if not isinstance(pattern, str) or len(pattern) > 300:
-        return False
-    try:
-        compiled = re.compile(pattern)
-    except re.error:
-        return False
-    if re.search(r"\([^)]*[+*][^)]*\)[+*]", compiled.pattern):
-        return False
-    return _regex_probe_timed(pattern)
 
 
 def _filter_safe_regexes(patterns: list) -> list[str]:
     safe: list[str] = []
     for p in patterns:
-        if _is_safe_regex(p):
+        if regex_safety_error(p) is None:
             safe.append(p)
         else:
             logger.warning("Dropping unsafe/invalid config regex on load: %s", str(p)[:80])
@@ -158,29 +124,9 @@ class ConfigStore:
                 errs.append(f"{name} too large (max 200)")
                 return
             for rx in xs:
-                if not isinstance(rx, str) or len(rx) > 300:
-                    errs.append(f"{name} contains invalid/too-long regex")
-                    continue
-                try:
-                    compiled = re.compile(rx)
-                except Exception:
-                    errs.append(f"{name} contains invalid regex: {rx}")
-                    continue
-                # ReDoS guard: reject patterns with nested quantifiers / known
-                # catastrophic backtracking constructs like (a+)+, (a*)*,
-                # (a|b+)*, or (.+.+)+  which cause exponential runtime.
-                raw = compiled.pattern
-                if re.search(r"\([^)]*[+*][^)]*\)[+*]", raw):
-                    errs.append(f"{name} contains unsafe regex (nested quantifiers): {rx[:80]}")
-                    continue
-                # Reject excessive use of alternation with overlapping quantifiers
-                if raw.count("|") > 20:
-                    errs.append(f"{name} regex has excessive alternation (>20 branches): {rx[:80]}")
-                    continue
-                if not _regex_probe_timed(rx):
-                    errs.append(
-                        f"{name} regex causes excessive backtracking (ReDoS risk): {rx[:80]}"
-                    )
+                err = regex_safety_error(rx, max_alternations=20)
+                if err:
+                    errs.append(f"{name} contains {err}: {str(rx)[:80]}")
 
         _validate_regex_list("blocked_input_regexes", cfg.blocked_input_regexes)
         _validate_regex_list("sanitize_input_regexes", cfg.sanitize_input_regexes)

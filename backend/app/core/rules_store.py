@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
-import threading
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -11,42 +9,17 @@ from redis.asyncio import Redis
 from redis.exceptions import WatchError
 
 from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
+from app.core.regex_safety import is_safe_regex
 from app.settings import settings
 
 logger = logging.getLogger("autodefense.rules_store")
-
-
-def _is_safe_regex(pattern: str) -> bool:
-    """Reject regexes with nested quantifiers or that hang on a test string."""
-    if not isinstance(pattern, str) or len(pattern) > 300:
-        return False
-    try:
-        compiled = re.compile(pattern)
-    except re.error:
-        return False
-    if re.search(r"\([^)]*[+*][^)]*\)[+*]", compiled.pattern):
-        return False
-    result = [True]
-
-    def _run():
-        try:
-            re.search(pattern, "a" * 50 + "!" + "a" * 50, flags=re.IGNORECASE)
-        except Exception:
-            result[0] = False
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=0.5)
-    if t.is_alive():
-        return False
-    return result[0]
 
 
 def _filter_safe_regexes(patterns: list) -> list[str]:
     """Return only regexes that compile and pass ReDoS checks."""
     safe: list[str] = []
     for p in patterns:
-        if _is_safe_regex(p):
+        if is_safe_regex(p):
             safe.append(p)
         else:
             logger.warning("Dropping unsafe/invalid dynamic regex: %s", str(p)[:80])

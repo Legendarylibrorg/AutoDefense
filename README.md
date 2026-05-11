@@ -136,6 +136,7 @@ AUTO DEFENSE/
 | [Host Scanners](docs/scanners.md) | Linux, macOS, and Windows scanner documentation |
 | [Configuration](docs/configuration.md) | All environment variables, runtime config, tuning |
 | [Deployment](docs/deployment.md) | Docker install, local dev, testing, production ops |
+| [GitHub: protect `main`](docs/maintainers/github-repository-setup.md) | Rulesets, PR-only workflow, required CI (`gh` script) |
 
 ## License
 

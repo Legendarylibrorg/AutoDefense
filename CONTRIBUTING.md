@@ -58,4 +58,5 @@ Open a [GitHub discussion](https://docs.github.com/en/discussions) if enabled fo
 
 ## Maintainers
 
-`CODEOWNERS` may be added when the core maintainer list is stable. Until then, reviews are best-effort from whoever has merge rights.
+- **Protect `main`:** run `./scripts/configure-github-ruleset-main.sh` once (with `gh` + admin rights) so `main` only accepts merges via **pull request** and required CI checks pass. See [docs/maintainers/github-repository-setup.md](docs/maintainers/github-repository-setup.md).
+- **`CODEOWNERS`:** add real `@username` / `@org/team` lines in `.github/CODEOWNERS` before enabling “require code owner review” in GitHub rules.

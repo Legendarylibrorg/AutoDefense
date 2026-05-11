@@ -1,0 +1,32 @@
+# GitHub: protect `main` (rulesets)
+
+The repository should use a **branch ruleset** so `main` cannot receive direct pushes: all changes go through **pull requests**, with CI green and (optionally) reviews.
+
+## Apply or refresh the ruleset
+
+From the repo root (requires [GitHub CLI](https://cli.github.com/) `gh` with **admin** on the repo, plus `jq`):
+
+```bash
+./scripts/configure-github-ruleset-main.sh
+```
+
+This creates or updates the ruleset **`AutoDefense: protect main`** with:
+
+- Block **branch deletion** and **force-push** (`non_fast_forward`)
+- **Pull request required** before merging to `main` (no direct pushes)
+- **Required status checks** (strict): Backend CI (Python 3.11 & 3.12) and Frontend CI (Node 20 & 22)
+
+### Environment overrides
+
+| Variable | Default | Notes |
+|----------|---------|--------|
+| `DEFAULT_BRANCH` | `main` | Branch to protect |
+| `REQUIRED_APPROVALS` | `0` | Approving reviews before merge; use `1` or more for teams |
+| `REQUIRE_CODEOWNERS` | `0` | Set `1` only with real entries in `.github/CODEOWNERS` |
+| `CONTEXTS_JSON` | (built-in) | JSON array of `{ "context": "Workflow / Job" }` if job names change |
+
+**First-time setup:** merge at least one PR so the four required checks exist on GitHub; otherwise the UI may not list them when editing the ruleset.
+
+## Manual alternative
+
+GitHub → **Settings** → **Rules** → **Rulesets** → create a ruleset targeting `main` with the same options (PR required, required checks, block force-push).

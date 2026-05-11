@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Iterable
 
 from app.core.models import AgentSignal
-
-
-@dataclass(frozen=True)
-class WeightedSignal:
-    agent: str
-    weight: float
 
 
 DEFAULT_WEIGHTS: dict[str, float] = {
@@ -31,7 +24,7 @@ def aggregate_risk(
 ) -> tuple[int, dict]:
     """
     Weighted aggregation that stays explainable.
-    - Each agent contributes max(score * weight).
+    - Each signal contributes score * agent_weight.
     - Confidence slightly attenuates contribution.
     """
     w = weights or DEFAULT_WEIGHTS

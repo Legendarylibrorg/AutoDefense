@@ -18,10 +18,10 @@ from app.core.models import (
     KernelScanPayload,
     KernelScanResponse,
 )
+from app.core.config_store import ConfigStore, risk_thresholds
 from app.core.redis_client import get_redis
 from app.core.risk import aggregate_risk
-from app.core.response_engine import ResponseEngine
-from app.core.config_store import ConfigStore
+from app.core.response_engine import risk_score_to_decision_action
 from app.settings import settings
 
 router = APIRouter()
@@ -36,11 +36,10 @@ def _kernel_ingest_requires_scanner_hmac() -> bool:
 
 
 def _verify_hmac(body_bytes: bytes, signature: str | None) -> None:
-    """Verify HMAC-SHA256 signature from scanner. Skips if HMAC key is not configured."""
-    if not settings.scanner_hmac_key:
-        return
+    """Verify HMAC-SHA256 signature from scanner."""
     if not signature:
         raise HTTPException(status_code=401, detail="Missing X-Scanner-Signature header")
+    assert settings.scanner_hmac_key is not None
     expected = hmac.new(
         settings.scanner_hmac_key.encode("utf-8"), body_bytes, hashlib.sha256
     ).hexdigest()
@@ -72,11 +71,7 @@ async def scan_kernel(
 
     bus = EventBus(redis)
     cfg = await ConfigStore(redis).load()
-    thresholds = {
-        "risk_allow_max": cfg.risk_allow_max,
-        "risk_monitor_max": cfg.risk_monitor_max,
-        "risk_sanitize_max": cfg.risk_sanitize_max,
-    }
+    thresholds = risk_thresholds(cfg)
 
     await bus.publish(
         Event(
@@ -99,8 +94,7 @@ async def scan_kernel(
     action = DecisionAction.allow
     if signals:
         risk, _explain = aggregate_risk(signals)
-        engine = ResponseEngine()
-        action = engine.decide_action(
+        action = risk_score_to_decision_action(
             risk,
             risk_allow_max=int(thresholds["risk_allow_max"]),
             risk_monitor_max=int(thresholds["risk_monitor_max"]),

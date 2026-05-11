@@ -1,26 +1,11 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from typing import Any
 
 from app.core.models import AgentSignal, AnalyzeRequest, ThreatType
 from app.core.rules_store import DynamicRules
-
-
-def _normalize_text(text: str) -> str:
-    """
-    Normalize Unicode and whitespace to defeat evasion techniques:
-    - NFKC normalization collapses full-width, math-bold, and other
-      visually-similar Unicode into their ASCII equivalents.
-    - Strip zero-width characters used for token fragmentation.
-    - Collapse internal whitespace/newlines to single spaces so
-      multi-line splits don't evade phrase-matching regexes.
-    """
-    out = unicodedata.normalize("NFKC", text)
-    out = re.sub(r"[\u200b\u200c\u200d\u200e\u200f\ufeff\u00ad]", "", out)
-    out = re.sub(r"\s+", " ", out)
-    return out
+from app.core.text import normalize_for_matching
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +170,7 @@ class SentinelAgent:
         self, req: AnalyzeRequest, dynamic: DynamicRules | None = None
     ) -> dict[str, Any]:
         text = req.user_input or ""
-        normalized = _normalize_text(text)
+        normalized = normalize_for_matching(text)
         inj = BASE_INJECTION_REGEXES + (dynamic.injection_regex_append if dynamic else [])
         exf = BASE_EXFIL_REGEXES + (dynamic.exfil_regex_append if dynamic else [])
 

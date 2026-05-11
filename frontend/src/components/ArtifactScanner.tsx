@@ -1,14 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SignalList } from "./SignalList";
+import { actionTone } from "../lib/actionTone";
 import { API, type Artifact, type ArtifactKind, type ScanResponse } from "../lib/api";
-
-function b64FromBytes(bytes: Uint8Array): string {
-  let bin = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(bin);
-}
+import { bytesToBase64 } from "../lib/encoding";
 
 async function fileToArtifact(file: File, kind: ArtifactKind): Promise<Artifact> {
   const buf = new Uint8Array(await file.arrayBuffer());
@@ -17,15 +11,8 @@ async function fileToArtifact(file: File, kind: ArtifactKind): Promise<Artifact>
     name: file.name,
     content_type: file.type || null,
     size_bytes: file.size,
-    content_base64: b64FromBytes(buf)
+    content_base64: bytesToBase64(buf)
   };
-}
-
-function tone(action: string) {
-  if (action === "block_isolate") return "border-danger/40 bg-danger/10";
-  if (action === "sanitize") return "border-warn/40 bg-warn/10";
-  if (action === "log_monitor") return "border-white/15 bg-black/10";
-  return "border-ok/40 bg-ok/10";
 }
 
 export function ArtifactScanner() {
@@ -45,7 +32,7 @@ export function ArtifactScanner() {
     return text.trim().length > 0;
   }, [kind, text, files]);
 
-  async function scan() {
+  const scan = useCallback(async () => {
     setErr(null);
     setResult(null);
     setShowDetails(false);
@@ -80,9 +67,8 @@ export function ArtifactScanner() {
     } finally {
       setRunning(false);
     }
-  }
+  }, [files, kind, text]);
 
-  // Auto-scan for text-like inputs with deterministic debounce.
   useEffect(() => {
     if (!autoScan) return;
     if (kind === "file" || kind === "image") return;
@@ -94,8 +80,7 @@ export function ArtifactScanner() {
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoScan, kind, text]);
+  }, [autoScan, kind, scan, text]);
 
   return (
     <div className="rounded-xl border border-white/10 bg-panel p-4">
@@ -184,7 +169,7 @@ export function ArtifactScanner() {
         ) : null}
 
         {result ? (
-          <div className={`rounded-lg border p-3 ${tone(result.action)}`}>
+          <div className={`rounded-lg border p-3 ${actionTone(result.action)}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <div className="text-sm font-semibold text-text">{result.action.toUpperCase()}</div>
@@ -203,36 +188,7 @@ export function ArtifactScanner() {
               <>
                 <div className="mt-3 text-xs font-semibold text-muted">Signals</div>
                 <div className="mt-2 space-y-2">
-                  {result.signals.length ? (
-                    result.signals
-                      .slice()
-                      .sort((a, b) => b.score * b.confidence - a.score * a.confidence)
-                      .slice(0, 8)
-                      .map((s, idx) => (
-                        <div
-                          key={`${s.agent}-${idx}`}
-                          className="rounded-md border border-white/10 bg-black/10 p-2"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-xs font-mono text-text">
-                              {s.agent} · {s.threat_type}
-                            </div>
-                            <div className="text-xs text-muted">
-                              score {s.score} · conf {Math.round(s.confidence * 100)}%
-                            </div>
-                          </div>
-                          {s.reasons?.length ? (
-                            <ul className="mt-2 list-disc pl-5 text-[11px] text-muted">
-                              {s.reasons.slice(0, 5).map((r) => (
-                                <li key={r}>{r}</li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                      ))
-                  ) : (
-                    <div className="text-sm text-muted">No signals (allow).</div>
-                  )}
+                  <SignalList signals={result.signals} />
                 </div>
 
                 <div className="mt-3 text-xs font-semibold text-muted">Explain</div>

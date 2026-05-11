@@ -1,12 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { SignalList } from "./SignalList";
+import { actionTone } from "../lib/actionTone";
 import { API, type AnalyzeResponse } from "../lib/api";
-
-function tone(action: string) {
-  if (action === "block_isolate") return "border-danger/40 bg-danger/10";
-  if (action === "sanitize") return "border-warn/40 bg-warn/10";
-  if (action === "log_monitor") return "border-white/15 bg-black/10";
-  return "border-ok/40 bg-ok/10";
-}
 
 export function AnalyzePanel() {
   const [userInput, setUserInput] = useState("");
@@ -81,7 +76,7 @@ export function AnalyzePanel() {
         ) : null}
 
         {result ? (
-          <div className={`rounded-lg border p-3 ${tone(result.action)}`}>
+          <div className={`rounded-lg border p-3 ${actionTone(result.action)}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <div className="text-sm font-semibold text-text">{result.action.toUpperCase()}</div>
@@ -118,36 +113,7 @@ export function AnalyzePanel() {
 
                 <div className="mt-3 text-xs font-semibold text-muted">Signals</div>
                 <div className="mt-2 space-y-2">
-                  {result.signals.length ? (
-                    result.signals
-                      .slice()
-                      .sort((a, b) => b.score * b.confidence - a.score * a.confidence)
-                      .slice(0, 8)
-                      .map((s, idx) => (
-                        <div
-                          key={`${s.agent}-${idx}`}
-                          className="rounded-md border border-white/10 bg-black/10 p-2"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-xs font-mono text-text">
-                              {s.agent} · {s.threat_type}
-                            </div>
-                            <div className="text-xs text-muted">
-                              score {s.score} · conf {Math.round(s.confidence * 100)}%
-                            </div>
-                          </div>
-                          {s.reasons?.length ? (
-                            <ul className="mt-2 list-disc pl-5 text-[11px] text-muted">
-                              {s.reasons.slice(0, 5).map((r) => (
-                                <li key={r}>{r}</li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
-                      ))
-                  ) : (
-                    <div className="text-sm text-muted">No signals (allow).</div>
-                  )}
+                  <SignalList signals={result.signals} />
                 </div>
 
                 {result.patches.length ? (

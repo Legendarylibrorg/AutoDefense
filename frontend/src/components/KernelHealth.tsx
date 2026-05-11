@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { API, type HealthInfo, type KernelStatus, type KernelFinding } from "../lib/api";
+import { API, type HealthInfo, type KernelStatus } from "../lib/api";
+import { osLabel } from "../lib/platform";
 
 function severityColor(s: string) {
   if (s === "critical") return "text-danger";
@@ -30,13 +31,6 @@ function severityRank(s: string): number {
   return 4;
 }
 
-function osLabel(os: string): string {
-  if (os === "linux") return "Linux";
-  if (os === "darwin") return "macOS";
-  if (os === "windows") return "Windows";
-  return os;
-}
-
 function scannerCommand(health: HealthInfo): string {
   const p = health.platform;
   if (p.in_container) {
@@ -56,7 +50,6 @@ function scannerCommand(health: HealthInfo): string {
 
 function NoScanView({ health }: { health: HealthInfo | null }) {
   const p = health?.platform;
-  const available = p?.kernel_scanner_available ?? false;
 
   return (
     <div className="rounded-xl border border-white/10 bg-panel p-4">

@@ -1,12 +1,12 @@
- import React from "react";
- 
- export function StatCard(props: {
-   title: string;
-   value: React.ReactNode;
-   hint?: string;
-   tone?: "ok" | "warn" | "danger" | "neutral";
- }) {
-   const tone =
+import type { ReactNode } from "react";
+
+export function StatCard(props: {
+  title: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: "ok" | "warn" | "danger";
+}) {
+  const tone =
      props.tone === "ok"
        ? "border-ok/30 bg-panel"
        : props.tone === "warn"

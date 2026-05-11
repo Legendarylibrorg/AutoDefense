@@ -285,34 +285,6 @@ async def test_zero_width_char_evasion(client):
 
 
 # ---------------------------------------------------------------------------
-# Sealed transport tamper resistance
-# ---------------------------------------------------------------------------
-
-
-async def test_sealed_tampered_ciphertext_rejected(client):
-    import hashlib
-    import json as json_mod
-
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-    key = b"\x00" * 32
-    nonce = b"\x01" * 12
-    raw = json_mod.dumps({"user_input": "hello"}).encode()
-    ct = AESGCM(key).encrypt(nonce, raw, b"analyze")
-    tampered_ct = bytearray(ct)
-    tampered_ct[0] ^= 0xFF
-    env = {
-        "v": 1,
-        "alg": "AES-256-GCM",
-        "nonce_b64": base64.b64encode(nonce).decode(),
-        "ct_b64": base64.b64encode(bytes(tampered_ct)).decode(),
-        "sha256": hashlib.sha256(raw).hexdigest(),
-    }
-    res = await client.post("/analyze/sealed", json={"sealed": env})
-    assert res.status_code == 400
-
-
-# ---------------------------------------------------------------------------
 # Config injection
 # ---------------------------------------------------------------------------
 

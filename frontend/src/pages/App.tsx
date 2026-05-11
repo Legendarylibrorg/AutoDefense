@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { API, type EventItem, type HealthInfo } from "../lib/api";
 import { useEventStream } from "../lib/useEventStream";
 import { AnalyzePanel } from "../components/AnalyzePanel";

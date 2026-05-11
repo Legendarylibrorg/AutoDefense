@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import AsyncIterator
 
@@ -16,27 +15,11 @@ class EventBus:
     def __init__(self, redis: Redis):
         self.redis = redis
         self.stream_key = settings.redis_stream_key
-        self._ensure_group_lock = asyncio.Lock()
 
     async def publish(self, event: Event) -> str:
         data = {"event": event.model_dump_json()}
         event_id = await self.redis.xadd(self.stream_key, data, maxlen=5000, approximate=True)
         return str(event_id)
-
-    async def ensure_consumer_group(self) -> None:
-        async with self._ensure_group_lock:
-            try:
-                await self.redis.xgroup_create(
-                    name=self.stream_key,
-                    groupname=settings.redis_consumer_group,
-                    id="0-0",
-                    mkstream=True,
-                )
-            except Exception as e:  # noqa: BLE001
-                # BUSYGROUP is expected on restarts.
-                msg = str(e)
-                if "BUSYGROUP" not in msg:
-                    raise
 
     async def consume_latest(
         self,

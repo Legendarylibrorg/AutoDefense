@@ -1,3 +1,5 @@
+import { bytesFromBase64, bytesToBase64 } from "./encoding";
+
 export type EventItem = {
   ts: string;
   type: string;
@@ -205,27 +207,11 @@ function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
   return ab.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
 }
 
-function b64(bytes: Uint8Array): string {
-  let bin = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(bin);
-}
-
-function bytesFromB64(s: string): Uint8Array {
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
 async function importHkdfBaseKey(): Promise<CryptoKey> {
   const transportKeyB64 = getResolvedTransportKeyB64();
   if (!transportKeyB64)
     throw new Error("Transport key missing (set in browser session or VITE_TRANSPORT_KEY_B64)");
-  const raw = bytesFromB64(transportKeyB64);
+  const raw = bytesFromBase64(transportKeyB64);
   if (raw.byteLength !== 32) throw new Error("Transport key must decode to 32 bytes");
   return crypto.subtle.importKey("raw", toArrayBuffer(raw), "HKDF", false, ["deriveKey"]);
 }
@@ -284,9 +270,9 @@ async function sealJson(obj: unknown, aad: string): Promise<SealedEnvelope> {
   return {
     v: 2,
     alg: "AES-256-GCM-DOUBLE",
-    inner_nonce_b64: b64(innerNonce),
-    outer_nonce_b64: b64(outerNonce),
-    ct_b64: b64(new Uint8Array(outerCt)),
+    inner_nonce_b64: bytesToBase64(innerNonce),
+    outer_nonce_b64: bytesToBase64(outerNonce),
+    ct_b64: bytesToBase64(new Uint8Array(outerCt)),
     sha256,
     hmac: mac,
   };

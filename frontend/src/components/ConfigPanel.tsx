@@ -1,7 +1,7 @@
- import React, { useEffect, useMemo, useState } from "react";
- import { API, type RuntimeConfig } from "../lib/api";
- 
- function clampInt(v: number, lo: number, hi: number) {
+import { useEffect, useMemo, useState } from "react";
+import { API, type RuntimeConfig } from "../lib/api";
+
+function clampInt(v: number, lo: number, hi: number) {
    return Math.max(lo, Math.min(hi, Math.round(v)));
  }
  

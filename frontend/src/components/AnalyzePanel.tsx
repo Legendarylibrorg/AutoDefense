@@ -1,12 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { actionTone } from "../lib/actionTone";
 import { API, type AnalyzeResponse } from "../lib/api";
-
-function tone(action: string) {
-  if (action === "block_isolate") return "border-danger/40 bg-danger/10";
-  if (action === "sanitize") return "border-warn/40 bg-warn/10";
-  if (action === "log_monitor") return "border-white/15 bg-black/10";
-  return "border-ok/40 bg-ok/10";
-}
 
 export function AnalyzePanel() {
   const [userInput, setUserInput] = useState("");
@@ -81,7 +75,7 @@ export function AnalyzePanel() {
         ) : null}
 
         {result ? (
-          <div className={`rounded-lg border p-3 ${tone(result.action)}`}>
+          <div className={`rounded-lg border p-3 ${actionTone(result.action)}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <div className="text-sm font-semibold text-text">{result.action.toUpperCase()}</div>

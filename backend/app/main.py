@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api.router import api_router
 from app.core.logging import configure_logging
 from app.core.redis_client import close_pool, get_redis
+from app.core.ws_auth import parse_ws_auth_protocol
 from app.settings import settings
 
 PUBLIC_PATHS = frozenset({"/health", "/docs", "/openapi.json", "/redoc"})
@@ -146,13 +147,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if request.scope.get("type") == "websocket":
-            token = ""
-            protocols = request.headers.get("sec-websocket-protocol", "")
-            for proto in protocols.split(","):
-                p = proto.strip()
-                if p.startswith("auth."):
-                    token = p.removeprefix("auth.")
-                    break
+            _, token = parse_ws_auth_protocol(request.headers.get("sec-websocket-protocol"))
         else:
             auth = request.headers.get("Authorization", "")
             token = auth.removeprefix("Bearer ").strip()

@@ -3,6 +3,23 @@ from __future__ import annotations
 from app.core.models import AgentSignal, AnalyzeResponse, DecisionAction
 
 
+def risk_score_to_decision_action(
+    risk_score: int,
+    *,
+    risk_allow_max: int,
+    risk_monitor_max: int,
+    risk_sanitize_max: int,
+) -> DecisionAction:
+    """Single ladder for risk score → action (coordinator + ResponseEngine + scan)."""
+    if risk_score <= risk_allow_max:
+        return DecisionAction.allow
+    if risk_score <= risk_monitor_max:
+        return DecisionAction.log_monitor
+    if risk_score <= risk_sanitize_max:
+        return DecisionAction.sanitize
+    return DecisionAction.block_isolate
+
+
 class ResponseEngine:
     def decide_action(
         self,
@@ -12,13 +29,12 @@ class ResponseEngine:
         risk_monitor_max: int,
         risk_sanitize_max: int,
     ) -> DecisionAction:
-        if risk_score <= risk_allow_max:
-            return DecisionAction.allow
-        if risk_score <= risk_monitor_max:
-            return DecisionAction.log_monitor
-        if risk_score <= risk_sanitize_max:
-            return DecisionAction.sanitize
-        return DecisionAction.block_isolate
+        return risk_score_to_decision_action(
+            risk_score,
+            risk_allow_max=risk_allow_max,
+            risk_monitor_max=risk_monitor_max,
+            risk_sanitize_max=risk_sanitize_max,
+        )
 
     def apply(
         self,

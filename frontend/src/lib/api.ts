@@ -1,11 +1,11 @@
 export type EventItem = {
-   ts: string;
-   type: string;
-   trace_id: string;
-   session_id: string;
-   payload: Record<string, unknown>;
- };
- 
+  ts: string;
+  type: string;
+  trace_id: string;
+  session_id: string;
+  payload: Record<string, unknown>;
+};
+
 export type RuntimeConfig = {
   version: number;
   risk_allow_max: number;
@@ -73,7 +73,6 @@ export type KernelFinding = {
 
 export type KernelStatus = {
   scanned: boolean;
-  /** True when stored status exists but could not be decrypted (e.g. key mismatch). */
   kernel_status_unavailable?: boolean;
   platform?: string;
   kernel_version?: string;
@@ -109,7 +108,6 @@ type SealedEnvelope = {
   hmac: string;
 };
 
-/** Session keys take precedence over Vite env so secrets are not required in the built bundle. */
 export const SESSION_KEYS = {
   apiKey: "autodefense_api_key",
   transportKeyB64: "autodefense_transport_key_b64",
@@ -117,6 +115,10 @@ export const SESSION_KEYS = {
 
 const httpBase = import.meta.env.VITE_BACKEND_HTTP ?? "http://localhost:8000";
 const wsBase = import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000";
+
+function apiRoot(): string {
+  return httpBase.replace(/\/$/, "");
+}
 
 export function getResolvedApiKey(): string | undefined {
   try {
@@ -150,7 +152,7 @@ function transportSealEnabled(): boolean {
 function authHeaders(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   const key = getResolvedApiKey();
-  if (key) h["Authorization"] = `Bearer ${key}`;
+  if (key) h.Authorization = `Bearer ${key}`;
   return h;
 }
 
@@ -158,6 +160,39 @@ function authGet(): RequestInit | undefined {
   const key = getResolvedApiKey();
   if (!key) return undefined;
   return { headers: { Authorization: `Bearer ${key}` } };
+}
+
+async function readJson<T>(res: Response, label: string): Promise<T> {
+  if (!res.ok) throw new Error(`${label} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+async function getJson<T>(path: string): Promise<T> {
+  const res = await fetch(`${apiRoot()}${path}`, authGet());
+  return readJson<T>(res, `${path}`);
+}
+
+async function getJsonPublic<T>(path: string): Promise<T> {
+  const res = await fetch(`${apiRoot()}${path}`);
+  return readJson<T>(res, `${path}`);
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${apiRoot()}${path}`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  return readJson<T>(res, `${path}`);
+}
+
+async function putJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${apiRoot()}${path}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  return readJson<T>(res, `${path}`);
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
@@ -188,7 +223,8 @@ function bytesFromB64(s: string): Uint8Array {
 
 async function importHkdfBaseKey(): Promise<CryptoKey> {
   const transportKeyB64 = getResolvedTransportKeyB64();
-  if (!transportKeyB64) throw new Error("Transport key missing (set in browser session or VITE_TRANSPORT_KEY_B64)");
+  if (!transportKeyB64)
+    throw new Error("Transport key missing (set in browser session or VITE_TRANSPORT_KEY_B64)");
   const raw = bytesFromB64(transportKeyB64);
   if (raw.byteLength !== 32) throw new Error("Transport key must decode to 32 bytes");
   return crypto.subtle.importKey("raw", toArrayBuffer(raw), "HKDF", false, ["deriveKey"]);
@@ -265,56 +301,32 @@ export const API = {
     const k = getResolvedApiKey();
     return k ? [`auth.${k}`] : undefined;
   },
-  async fetchHealth(): Promise<HealthInfo> {
-     const res = await fetch(`${httpBase.replace(/\/$/, "")}/health`);
-     if (!res.ok) throw new Error(`GET /health failed: ${res.status}`);
-     return (await res.json()) as HealthInfo;
-   },
-   async fetchEvents(): Promise<EventItem[]> {
-     const res = await fetch(`${httpBase.replace(/\/$/, "")}/events`, authGet());
-     if (!res.ok) throw new Error(`GET /events failed: ${res.status}`);
-     return (await res.json()) as EventItem[];
-   },
-   async fetchAlerts(): Promise<EventItem[]> {
-     const res = await fetch(`${httpBase.replace(/\/$/, "")}/alerts`, authGet());
-     if (!res.ok) throw new Error(`GET /alerts failed: ${res.status}`);
-     return (await res.json()) as EventItem[];
-   },
-   async fetchMetrics(): Promise<Record<string, unknown>> {
-     const res = await fetch(`${httpBase.replace(/\/$/, "")}/metrics`, authGet());
-     if (!res.ok) throw new Error(`GET /metrics failed: ${res.status}`);
-     return (await res.json()) as Record<string, unknown>;
+  fetchHealth(): Promise<HealthInfo> {
+    return getJsonPublic<HealthInfo>("/health");
   },
-  async fetchConfig(): Promise<RuntimeConfig> {
-    const res = await fetch(`${httpBase.replace(/\/$/, "")}/config`, authGet());
-    if (!res.ok) throw new Error(`GET /config failed: ${res.status}`);
-    return (await res.json()) as RuntimeConfig;
+  fetchEvents(): Promise<EventItem[]> {
+    return getJson<EventItem[]>("/events");
   },
-  async putConfig(cfg: RuntimeConfig): Promise<RuntimeConfig> {
-    const res = await fetch(`${httpBase.replace(/\/$/, "")}/config`, {
-      method: "PUT",
-      headers: authHeaders(),
-      body: JSON.stringify(cfg)
-    });
-    if (!res.ok) throw new Error(`PUT /config failed: ${res.status}`);
-    return (await res.json()) as RuntimeConfig;
+  fetchAlerts(): Promise<EventItem[]> {
+    return getJson<EventItem[]>("/alerts");
+  },
+  fetchMetrics(): Promise<Record<string, unknown>> {
+    return getJson<Record<string, unknown>>("/metrics");
+  },
+  fetchConfig(): Promise<RuntimeConfig> {
+    return getJson<RuntimeConfig>("/config");
+  },
+  putConfig(cfg: RuntimeConfig): Promise<RuntimeConfig> {
+    return putJson<RuntimeConfig>("/config", cfg);
   },
   async scanArtifacts(artifacts: Artifact[]): Promise<ScanResponse> {
     const sealed = transportSealEnabled();
-    const url = `${httpBase.replace(/\/$/, "")}${sealed ? "/scan/sealed" : "/scan"}`;
+    const path = sealed ? "/scan/sealed" : "/scan";
     const body = sealed ? { sealed: await sealJson({ artifacts }, "scan") } : { artifacts };
-    const res = await fetch(url, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) throw new Error(`POST /scan failed: ${res.status}`);
-    return (await res.json()) as ScanResponse;
+    return postJson<ScanResponse>(path, body);
   },
-  async fetchKernelStatus(): Promise<KernelStatus> {
-    const res = await fetch(`${httpBase.replace(/\/$/, "")}/kernel/status`, authGet());
-    if (!res.ok) throw new Error(`GET /kernel/status failed: ${res.status}`);
-    return (await res.json()) as KernelStatus;
+  fetchKernelStatus(): Promise<KernelStatus> {
+    return getJson<KernelStatus>("/kernel/status");
   },
   async analyzeInput(req: {
     user_input: string;
@@ -322,15 +334,8 @@ export const API = {
     tool_calls?: Array<Record<string, unknown>>;
   }): Promise<AnalyzeResponse> {
     const sealed = transportSealEnabled();
-    const url = `${httpBase.replace(/\/$/, "")}${sealed ? "/analyze/sealed" : "/analyze"}`;
+    const path = sealed ? "/analyze/sealed" : "/analyze";
     const body = sealed ? { sealed: await sealJson(req, "analyze") } : req;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) throw new Error(`POST /analyze failed: ${res.status}`);
-    return (await res.json()) as AnalyzeResponse;
-  }
- };
- 
+    return postJson<AnalyzeResponse>(path, body);
+  },
+};

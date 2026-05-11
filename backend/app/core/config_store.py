@@ -15,9 +15,29 @@ from app.settings import settings
 
 logger = logging.getLogger("autodefense.config_store")
 
+_RE_PROBE = "a" * 50 + "!" + "a" * 50
+
+
+def _regex_probe_timed(pattern: str) -> bool:
+    """Return True if ``re.search`` on a worst-case probe finishes within ~0.5s."""
+    ok: list[bool] = [True]
+
+    def _run() -> None:
+        try:
+            re.search(pattern, _RE_PROBE, flags=re.IGNORECASE)
+        except Exception:
+            ok[0] = False
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout=0.5)
+    if t.is_alive():
+        return False
+    return ok[0]
+
 
 def _is_safe_regex(pattern: str) -> bool:
-    """Quick check: compilable, no nested quantifiers, doesn't hang on probe."""
+    """Compilable, no nested quantifiers, and no ReDoS on probe."""
     if not isinstance(pattern, str) or len(pattern) > 300:
         return False
     try:
@@ -26,20 +46,7 @@ def _is_safe_regex(pattern: str) -> bool:
         return False
     if re.search(r"\([^)]*[+*][^)]*\)[+*]", compiled.pattern):
         return False
-    result = [True]
-
-    def _run():
-        try:
-            re.search(pattern, "a" * 50 + "!" + "a" * 50, flags=re.IGNORECASE)
-        except Exception:
-            result[0] = False
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=0.5)
-    if t.is_alive():
-        return False
-    return result[0]
+    return _regex_probe_timed(pattern)
 
 
 def _filter_safe_regexes(patterns: list) -> list[str]:
@@ -50,24 +57,6 @@ def _filter_safe_regexes(patterns: list) -> list[str]:
         else:
             logger.warning("Dropping unsafe/invalid config regex on load: %s", str(p)[:80])
     return safe
-
-
-def _safe_regex_test(pattern: str, errs: list[str], name: str) -> None:
-    """Run a compiled regex against a worst-case-ish string with a timeout to catch ReDoS."""
-    probe = "a" * 50 + "!" + "a" * 50
-    result: list[bool] = [True]
-
-    def _run():
-        try:
-            re.search(pattern, probe, flags=re.IGNORECASE)
-        except Exception:
-            result[0] = False
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-    t.join(timeout=0.5)
-    if t.is_alive():
-        errs.append(f"{name} regex causes excessive backtracking (ReDoS risk): {pattern[:80]}")
 
 
 def _load_baseline_policy() -> dict[str, Any]:
@@ -94,6 +83,23 @@ class RuntimeConfig:
     self_heal_enabled: bool
     blocked_input_regexes: list[str]
     sanitize_input_regexes: list[str]
+
+
+def risk_thresholds(cfg: RuntimeConfig) -> dict[str, int]:
+    """Shared shape for coordinator / ResponseEngine / scan path."""
+    return {
+        "risk_allow_max": cfg.risk_allow_max,
+        "risk_monitor_max": cfg.risk_monitor_max,
+        "risk_sanitize_max": cfg.risk_sanitize_max,
+    }
+
+
+def runtime_policy_for_agents(cfg: RuntimeConfig) -> dict[str, Any]:
+    """PolicyAgent input: runtime regex lists from stored config."""
+    return {
+        "blocked_input_regexes": cfg.blocked_input_regexes,
+        "sanitize_input_regexes": cfg.sanitize_input_regexes,
+    }
 
 
 class ConfigStore:
@@ -171,8 +177,10 @@ class ConfigStore:
                 if raw.count("|") > 20:
                     errs.append(f"{name} regex has excessive alternation (>20 branches): {rx[:80]}")
                     continue
-                # Verify the regex can match a trivial string within a time bound
-                _safe_regex_test(rx, errs, name)
+                if not _regex_probe_timed(rx):
+                    errs.append(
+                        f"{name} regex causes excessive backtracking (ReDoS risk): {rx[:80]}"
+                    )
 
         _validate_regex_list("blocked_input_regexes", cfg.blocked_input_regexes)
         _validate_regex_list("sanitize_input_regexes", cfg.sanitize_input_regexes)

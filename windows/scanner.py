@@ -2,9 +2,8 @@
 """
 AUTO DEFENSE — Windows Security Scanner
 
-Standalone zero-dependency script (stdlib only) that audits Windows security
-posture: Defender, firewall, UAC, BitLocker, RDP, SMB, sniffer/MITM
-processes, scheduled tasks, autorun entries, and more.
+Audits Windows security posture (Defender, firewall, UAC, persistence, etc.).
+Requires this repository's ``scanners/`` package (run from repo root).
 
 Posts findings to the AUTO DEFENSE backend then exits.
 
@@ -29,25 +28,10 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-
-# ---------------------------------------------------------------------------
-# Finding helper
-# ---------------------------------------------------------------------------
-
-def finding(
-    category: str,
-    severity: str,
-    title: str,
-    detail: str,
-    evidence: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    return {
-        "category": category,
-        "severity": severity,
-        "title": title,
-        "detail": detail,
-        "evidence": evidence or {},
-    }
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+from scanners.finding import finding  # noqa: E402
 
 
 def _ps(script: str, timeout: int = 15) -> str | None:

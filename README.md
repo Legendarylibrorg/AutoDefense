@@ -78,7 +78,7 @@ Six rounds of adversarial red-team auditing have hardened the system across ever
 | **Authentication** | Constant-time API key comparison (HMAC), WebSocket auth via `Sec-WebSocket-Protocol` header (no query param leakage) |
 | **Input validation** | NFKC Unicode normalization, zero-width character stripping, ReDoS guards on all dynamic regexes (config + rules), Pydantic field constraints |
 | **SSRF** | Regex patterns + numeric IP resolution (hex/octal/decimal) + non-blocking async DNS with 2s timeout |
-| **DoS protection** | 10 MB body limit (Content-Length + chunked), per-IP rate limiting with LRU eviction, WebSocket timeouts + connection caps |
+| **DoS protection** | 10 MB body limit (Content-Length + chunked), per-IP rate limiting in **Redis** (shared across workers), WebSocket timeouts + connection caps |
 | **Infrastructure** | Non-root Docker containers, Redis password via `REDISCLI_AUTH` (no process list leaks), hardened Nginx CSP, platform info redaction in production |
 | **Self-healing** | Dynamic rules actually loaded and applied per-request, validated against ReDoS before activation |
 | **Crypto integrity** | `alg:none` downgrade rejection, HMAC-SHA256 scanner payload signing, sealed transport with AAD binding |

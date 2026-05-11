@@ -149,13 +149,16 @@ class CryptoManager:
             return {}
 
         expected_hmac = str(payload.get("hmac", ""))
-        if expected_hmac:
-            actual = _hmac.new(self._key_hmac, raw, hashlib.sha256).hexdigest()
-            if not _hmac.compare_digest(actual, expected_hmac):
-                return {}
+        if not expected_hmac:
+            return {}
+        actual = _hmac.new(self._key_hmac, raw, hashlib.sha256).hexdigest()
+        if not _hmac.compare_digest(actual, expected_hmac):
+            return {}
 
         expected_sha = str(payload.get("sha256", ""))
-        if expected_sha and sha256_hex(raw) != expected_sha:
+        if not expected_sha:
+            return {}
+        if sha256_hex(raw) != expected_sha:
             return {}
 
         obj = json.loads(raw.decode("utf-8"))

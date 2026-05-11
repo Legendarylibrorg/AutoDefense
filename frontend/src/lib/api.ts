@@ -107,6 +107,8 @@ type SealedEnvelope = {
   hmac: string;
 };
 
+// Vite injects import.meta.env at build time; every VITE_* value ships in the browser bundle.
+// Do not treat API keys or transport secrets as confidential — use a gateway or short-lived tokens in production.
 const httpBase = import.meta.env.VITE_BACKEND_HTTP ?? "http://localhost:8000";
 const wsBase = import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000";
 const transportKeyB64 = import.meta.env.VITE_TRANSPORT_KEY_B64 as string | undefined;

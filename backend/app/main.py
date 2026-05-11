@@ -5,7 +5,6 @@ import hmac
 import logging
 import os
 import time
-from collections import OrderedDict
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -16,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.router import api_router
 from app.core.logging import configure_logging
-from app.core.redis_client import close_pool
+from app.core.redis_client import close_pool, get_redis
 from app.settings import settings
 
 PUBLIC_PATHS = frozenset({"/health", "/docs", "/openapi.json", "/redoc"})
@@ -39,9 +38,17 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
             except (ValueError, OverflowError):
                 return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
         elif request.method in ("POST", "PUT", "PATCH"):
-            body = await request.body()
-            if len(body) > MAX_BODY_BYTES:
-                return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+            # Stream with a hard cap so chunked / unknown-length bodies cannot buffer past MAX.
+            total = 0
+            chunks: list[bytes] = []
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > MAX_BODY_BYTES:
+                    return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+                chunks.append(chunk)
+            request._body = b"".join(chunks)
         return await call_next(request)
 
 
@@ -90,49 +97,47 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 # ---------------------------------------------------------------------------
-# Rate limiter with bounded LRU eviction (C3 fix)
+# Rate limiter — Redis fixed-window (shared across workers / replicas)
 # ---------------------------------------------------------------------------
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
+class RedisRateLimitMiddleware(BaseHTTPMiddleware):
     """
-    In-memory sliding-window rate limiter per client IP.
-    Uses an LRU OrderedDict capped at max_clients to prevent memory exhaustion.
+    Per-IP fixed-window counter in Redis so multiple uvicorn workers or replicas
+    share one limit. On Redis errors we fail open (allow) so availability is not
+    tied to Redis being reachable mid-request.
     """
 
-    def __init__(
-        self, app, *, max_requests: int = 120, window_seconds: int = 60, max_clients: int = 10_000
-    ):
+    def __init__(self, app, *, max_requests: int = 120, window_seconds: int = 60):
         super().__init__(app)
         self.max_requests = max_requests
-        self.window = window_seconds
-        self.max_clients = max_clients
-        self._hits: OrderedDict[str, list[float]] = OrderedDict()
+        self.window_seconds = window_seconds
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 
         client = request.client.host if request.client else "unknown"
-        now = time.monotonic()
-        cutoff = now - self.window
+        bucket = int(time.time()) // self.window_seconds
+        key = f"autodefense:ratelimit:v1:{client}:{bucket}"
 
-        if client in self._hits:
-            self._hits.move_to_end(client)
-        else:
-            if len(self._hits) >= self.max_clients:
-                self._hits.popitem(last=False)
-
-        window = self._hits.setdefault(client, [])
-        window[:] = [t for t in window if t > cutoff]
-
-        if len(window) >= self.max_requests:
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "Rate limit exceeded. Try again later."},
-                headers={"Retry-After": str(self.window)},
+        try:
+            redis = get_redis()
+            current = await redis.incr(key)
+            if current == 1:
+                await redis.expire(key, self.window_seconds + 5)
+            if current > self.max_requests:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Rate limit exceeded. Try again later."},
+                    headers={"Retry-After": str(self.window_seconds)},
+                )
+        except Exception as exc:
+            logging.getLogger("autodefense").warning(
+                "Rate limit check failed; allowing request (%s)",
+                exc,
+                extra={"event_type": "ratelimit", "action": "redis_fallback"},
             )
 
-        window.append(now)
         return await call_next(request)
 
 
@@ -216,7 +221,7 @@ def create_app() -> FastAPI:
     # Starlette applies them bottom-up, so we add in reverse.
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(BodySizeLimitMiddleware)
-    app.add_middleware(RateLimitMiddleware, max_requests=120, window_seconds=60, max_clients=10_000)
+    app.add_middleware(RedisRateLimitMiddleware, max_requests=120, window_seconds=60)
     app.add_middleware(AuthMiddleware, api_key=settings.api_key)
     app.add_middleware(
         CORSMiddleware,

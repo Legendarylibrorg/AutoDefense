@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
+import httpx
 from fakeredis.aioredis import FakeRedis
-from httpx import ASGITransport, AsyncClient
 
 from app.core.redis_client import get_redis
 from app.main import create_app
@@ -12,10 +12,10 @@ TEST_API_KEY = "test-api-key-auth"
 
 
 @pytest.fixture
-def authed_app():
-    settings.api_key = TEST_API_KEY
-    settings.scanner_hmac_key = None
-    settings.data_encryption_enabled = False
+def authed_app(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
+    monkeypatch.setattr(settings, "scanner_hmac_key", None)
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
     app = create_app()
     fake = FakeRedis()
     app.dependency_overrides[get_redis] = lambda: fake
@@ -23,16 +23,16 @@ def authed_app():
 
 
 async def test_no_auth_header_returns_401(authed_app):
-    transport = ASGITransport(app=authed_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    transport = httpx.ASGITransport(app=authed_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         res = await c.get("/events")
     assert res.status_code == 401
     assert res.json()["detail"] == "Unauthorized"
 
 
 async def test_wrong_api_key_returns_401(authed_app):
-    transport = ASGITransport(app=authed_app)
-    async with AsyncClient(
+    transport = httpx.ASGITransport(app=authed_app)
+    async with httpx.AsyncClient(
         transport=transport,
         base_url="http://test",
         headers={"Authorization": "Bearer wrong-key"},
@@ -42,8 +42,8 @@ async def test_wrong_api_key_returns_401(authed_app):
 
 
 async def test_malformed_bearer_returns_401(authed_app):
-    transport = ASGITransport(app=authed_app)
-    async with AsyncClient(
+    transport = httpx.ASGITransport(app=authed_app)
+    async with httpx.AsyncClient(
         transport=transport,
         base_url="http://test",
         headers={"Authorization": "Token " + TEST_API_KEY},
@@ -53,8 +53,8 @@ async def test_malformed_bearer_returns_401(authed_app):
 
 
 async def test_valid_api_key_passes(authed_app):
-    transport = ASGITransport(app=authed_app)
-    async with AsyncClient(
+    transport = httpx.ASGITransport(app=authed_app)
+    async with httpx.AsyncClient(
         transport=transport,
         base_url="http://test",
         headers={"Authorization": f"Bearer {TEST_API_KEY}"},
@@ -64,20 +64,20 @@ async def test_valid_api_key_passes(authed_app):
 
 
 async def test_health_is_public(authed_app):
-    transport = ASGITransport(app=authed_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    transport = httpx.ASGITransport(app=authed_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         res = await c.get("/health")
     assert res.status_code == 200
 
 
-async def test_no_api_key_configured_allows_all():
-    settings.api_key = None
-    settings.scanner_hmac_key = None
-    settings.data_encryption_enabled = False
+async def test_no_api_key_configured_allows_all(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "api_key", None)
+    monkeypatch.setattr(settings, "scanner_hmac_key", None)
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
     app = create_app()
     fake = FakeRedis()
     app.dependency_overrides[get_redis] = lambda: fake
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         res = await c.get("/events")
     assert res.status_code == 200

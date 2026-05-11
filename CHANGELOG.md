@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Dependabot: ignore **semver-major** updates for `tailwindcss` until Tailwind v4 PostCSS migration is planned; raise **lodash** override floor to **4.18.0** (transitive prototype-pollution advisories).
+
 ### Added
 
 - Open-source governance: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, this changelog

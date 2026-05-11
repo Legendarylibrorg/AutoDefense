@@ -16,6 +16,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    # Tailwind v4 needs @tailwindcss/postcss + config migration — ignore major until tracked separately.
+    ignore:
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
     groups:
       react-ecosystem:
         patterns:

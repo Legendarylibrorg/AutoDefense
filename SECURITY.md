@@ -2,24 +2,28 @@
 
 ## Supported versions
 
-Security fixes are applied on the default branch (`main`). Releases are tagged as needed; there is no separate long-term support branch yet.
+Security fixes land on the default branch (`main`). Tagged releases are cut as needed; there is no separate long-term support branch.
 
-## Reporting a vulnerability
+## Vulnerability reporting
 
-**Please do not open a public GitHub issue for unfixed security vulnerabilities** — that can put users at risk before a fix exists.
+**Do not open a public GitHub issue for an unfixed security vulnerability** — that can put users at risk before a fix ships.
 
-1. **Preferred:** Use GitHub’s [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability) for this repository when it is enabled for the repo. *(Maintainers: turn it on under **Settings → Security → Code security** so reporters can use it.)*
-2. **Alternative:** Use a confidential channel maintainers publish (security email, bug bounty program, etc.), if any is listed on the repo or organization profile.
+### How to report
 
-Include as much of the following as you can:
+1. **Preferred:** [Security → Report a vulnerability](https://github.com/Legendarylibrorg/AutoDefense/security) for this repository (private GitHub reporting). If the button is missing, maintainers should enable it under **Settings → Security → Code security → Private vulnerability reporting**.
+2. **Fallback:** A confidential channel published on the repo or organization profile (security contact email, etc.), if any.
 
-- Affected component (backend, frontend, Docker setup, etc.) and paths or endpoints
-- Steps or a minimal request/script to reproduce
-- What you observed vs. what you expected
-- Impact assessment (confidentiality, integrity, availability)
-- Optional: suggested fix or patch idea
+### What to include
 
-We aim to acknowledge receipt within a few business days. Coordination on disclosure timing (e.g. after a patch release) is welcome.
+- Affected area (backend, frontend, Docker defaults, etc.) and paths or endpoints
+- Steps or a minimal repro (request, script, or config)
+- Observed vs expected behavior
+- Impact (confidentiality, integrity, availability)
+- Optional: patch or mitigation idea
+
+### What to expect
+
+We aim to acknowledge within a few business days. **Coordinated disclosure** is preferred: please avoid public technical detail until maintainers agree on a release or advisory timeline.
 
 ## Scope
 

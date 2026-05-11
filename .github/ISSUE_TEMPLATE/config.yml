@@ -1,1 +1,5 @@
 blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Legendarylibrorg/AutoDefense/security
+    about: Use private reporting — do not file a public issue. See SECURITY.md in the repo root.

@@ -125,7 +125,7 @@ AUTO DEFENSE/
 | Document | Contents |
 |----------|----------|
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Local dev, tests, PR expectations |
-| [SECURITY.md](SECURITY.md) | How to report vulnerabilities responsibly |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting (private / coordinated disclosure) |
 | [CHANGELOG.md](CHANGELOG.md) | Release-oriented change summary |
 | [Code of Conduct](CODE_OF_CONDUCT.md) | Community expectations |
 

@@ -8,6 +8,10 @@ Thank you for helping improve AutoDefense. This document describes how to work o
 
 Contributors are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## Reporting security vulnerabilities
+
+Do **not** open a public issue for unfixed security bugs. Use [SECURITY.md](SECURITY.md) (private GitHub reporting or the fallback described there).
+
 ## Development setup
 
 ### Backend (Python)

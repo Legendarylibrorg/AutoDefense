@@ -4,9 +4,9 @@ import hashlib
 import hmac
 import json
 
+import httpx
 import pytest
 from fakeredis.aioredis import FakeRedis
-from httpx import ASGITransport, AsyncClient
 
 from app.core.redis_client import get_redis
 from app.main import create_app
@@ -17,11 +17,11 @@ TEST_HMAC_KEY = "test-hmac-key-for-scanner"
 
 
 @pytest.fixture
-def hmac_app():
-    settings.api_key = TEST_API_KEY
-    settings.scanner_hmac_key = TEST_HMAC_KEY
-    settings.data_encryption_enabled = False
-    settings.transport_seal_enabled = False
+def hmac_app(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
+    monkeypatch.setattr(settings, "scanner_hmac_key", TEST_HMAC_KEY)
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
+    monkeypatch.setattr(settings, "transport_seal_enabled", False)
     app = create_app()
     fake = FakeRedis()
     app.dependency_overrides[get_redis] = lambda: fake
@@ -30,8 +30,8 @@ def hmac_app():
 
 @pytest.fixture
 async def hmac_client(hmac_app):
-    transport = ASGITransport(app=hmac_app)
-    async with AsyncClient(
+    transport = httpx.ASGITransport(app=hmac_app)
+    async with httpx.AsyncClient(
         transport=transport,
         base_url="http://test",
         headers={"Authorization": f"Bearer {TEST_API_KEY}"},

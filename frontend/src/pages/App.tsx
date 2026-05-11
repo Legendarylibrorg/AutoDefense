@@ -11,7 +11,16 @@ import { StatCard } from "../components/StatCard";
 
 function classifyAction(type: string): "allow" | "log_monitor" | "sanitize" | "block_isolate" | "unknown" {
   if (!type.startsWith("decision.")) return "unknown";
-  return (type.split(".")[1] as any) ?? "unknown";
+  const suffix = type.slice("decision.".length);
+  if (
+    suffix === "allow" ||
+    suffix === "log_monitor" ||
+    suffix === "sanitize" ||
+    suffix === "block_isolate"
+  ) {
+    return suffix;
+  }
+  return "unknown";
 }
 
 function countDecisions(events: EventItem[]) {

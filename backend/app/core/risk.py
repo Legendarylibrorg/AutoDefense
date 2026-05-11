@@ -68,7 +68,9 @@ def aggregate_risk(
             floors = max(floors, 50.0)
         if tt in ("prompt_injection", "jailbreak", "kernel_exploit", "kernel_integrity",
                    "tool_abuse", "data_exfiltration"):
-            floors = max(floors, 25.0)
+            # Align with policy_violation/malware floors so clear LLM threats exceed
+            # default monitor band (≤60) and trigger sanitize/block + self-heal tests.
+            floors = max(floors, 50.0)
     total += floors
 
     risk = clamp_int(total)

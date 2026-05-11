@@ -2,7 +2,7 @@
 
 Autonomous, event-driven, multi-agent defense system that monitors AI inputs, outputs, and tool calls in real time — scoring risk, responding autonomously, self-healing with dynamic guardrails, and streaming full observability to a React dashboard.
 
-**Double-layer AES-256-GCM encryption by default** — transport and at-rest paths use two AES-GCM layers with HKDF-derived subkeys, HMAC-SHA256 integrity binding, and SHA-256 verification where documented in [Security](docs/security.md). Keys can be auto-generated on first run via `scripts/start.sh`.
+**Double-layer AES-256-GCM encryption by default** — for each 32-byte master key (transport + at-rest), the code derives **exactly three** HKDF-SHA256 subkeys (inner AES, outer AES, HMAC); each payload is verified with **four** checks on decrypt (outer GCM tag, inner GCM tag, HMAC, SHA-256 of plaintext). Details: [Security → Encryption](docs/security.md#encryption). Keys can be auto-generated on first run via `scripts/start.sh`.
 
 This software uses **pattern-based heuristics and configurable rules**. It **does not guarantee** detection of every attack, elimination of false positives, or fitness for any particular compliance regime or threat model. Evaluate against your own requirements.
 
@@ -47,6 +47,8 @@ flowchart LR
 
 This copies `.env.example` to `.env`, auto-generates encryption keys and API key, and runs `docker compose up --build`.
 
+**Full walkthrough from `git clone`:** [docs/setup.md](docs/setup.md) (prerequisites, `.env`, Docker, local dev, scanners, links to encryption docs).
+
 | URL | What |
 |-----|------|
 | http://localhost:3000 | Dashboard |
@@ -78,7 +80,7 @@ The codebase has been refined through **multiple internal security-focused revie
 
 | Area | Hardening |
 |------|-----------|
-| **Encryption** | Double-layer AES-256-GCM with 3 HKDF-derived subkeys (inner, outer, HMAC) + SHA-256 hash — 4 independent crypto checks per payload |
+| **Encryption** | Double-layer AES-256-GCM: **3** HKDF-SHA256 subkeys per master (inner AES, outer AES, HMAC); decrypt runs **4** checks (both GCM tags + HMAC + SHA-256 of plaintext) |
 | **Authentication** | Constant-time API key comparison (HMAC), WebSocket auth via `Sec-WebSocket-Protocol` header (no query param leakage) |
 | **Input validation** | NFKC Unicode normalization, zero-width character stripping, ReDoS guards on all dynamic regexes (config + rules), Pydantic field constraints |
 | **SSRF** | Regex patterns + numeric IP resolution (hex/octal/decimal) + non-blocking async DNS with 2s timeout |
@@ -104,9 +106,10 @@ AUTO DEFENSE/
 │       ├── components/      # StatCard, RiskChart, EventFeed, ConfigPanel, KernelHealth, ...
 │       ├── lib/             # API client, WebSocket hook
 │       └── pages/           # App layout
-├── kernel/                  # Linux host scanner (zero deps)
-├── macos/                   # macOS host scanner (zero deps)
-├── windows/                 # Windows host scanner (zero deps)
+├── scanners/                # Shared helpers imported by platform scanners
+├── kernel/                  # Linux host scanner (needs repo `scanners/` on path)
+├── macos/                   # macOS host scanner (needs repo `scanners/` on path)
+├── windows/                 # Windows host scanner (needs repo `scanners/` on path)
 ├── simulations/             # Attack simulation scripts
 ├── scripts/                 # Start scripts (sh + ps1)
 ├── docs/                    # Documentation
@@ -130,6 +133,7 @@ AUTO DEFENSE/
 
 | Document | Contents |
 |----------|----------|
+| [Setup from clone](docs/setup.md) | Git clone → `.env` → Docker or local backend/frontend → scanners |
 | [Architecture](docs/architecture.md) | System design, agent pipeline, data flow, event streaming |
 | [API Reference](docs/api.md) | Every endpoint with request/response examples |
 | [Security](docs/security.md) | Threat model, encryption, OWASP coverage matrix, attack patterns |

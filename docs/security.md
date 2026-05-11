@@ -77,7 +77,7 @@ Both at-rest and transport encryption use a **double-layer** design. From a sing
 3. HMAC-SHA256 verification (key_hmac) — constant-time comparison
 4. SHA-256 hash verification — ensures bit-perfect plaintext recovery
 
-Any single check failure returns an empty result. An attacker must simultaneously break all four cryptographic gates to tamper with a payload.
+Any single check failure returns an empty result. Decryption applies **four independent checks** (outer GCM authentication tag, inner GCM tag, HMAC-SHA256 over plaintext, SHA-256 over plaintext). Those are **not** four HKDF subkeys — there are **exactly three** derived keys; the fourth item is a hash of the plaintext for bit-exact recovery detection.
 
 #### v2 envelope format
 
@@ -97,6 +97,21 @@ Any single check failure returns an empty result. An attacker must simultaneousl
 
 v1 single-layer envelopes (`alg: "AES-256-GCM"`) are still accepted for decryption. All new writes use v2. The `alg: "none"` downgrade is rejected when encryption is enabled.
 
+### HKDF parameters (backend and browser)
+
+Each **32-byte base64-decoded master** (`AUTODEFENSE_DATA_KEY_B64` or `AUTODEFENSE_TRANSPORT_KEY_B64`) feeds **three** separate HKDF-SHA256 derivations — **three subkeys total**, not four:
+
+| # | Material | HKDF `info` (UTF-8 bytes) | Used for |
+|---|----------|---------------------------|----------|
+| 1 | `key_inner` | `autodefense-inner-v2` | Inner AES-256-GCM |
+| 2 | `key_outer` | `autodefense-outer-v2` | Outer AES-256-GCM |
+| 3 | `key_hmac` | `autodefense-hmac-v2` | HMAC-SHA256 over canonical plaintext bytes |
+
+- **Backend** (`app/core/crypto.py`): `cryptography.hazmat.primitives.kdf.hkdf.HKDF` with SHA-256, **output length 32** per call, **`salt=None`**. For this library, `salt=None` uses a **digest-sized all-zero salt** in the extract step (32 zero bytes for SHA-256), per RFC 5869-style fixed salt when none is supplied.
+- **Bundled dashboard** (`frontend/src/lib/api.ts`): Web Crypto **HKDF** with SHA-256, **`salt` = 32 zero bytes** (`new Uint8Array(32)`), same three **`info`** strings — **must stay aligned** with the backend or `/analyze/sealed` and `/scan/sealed` will fail to decrypt.
+
+Third-party clients implementing sealed transport should mirror this triple derivation and the v2 envelope layout below; do **not** introduce a fourth HKDF output unless the protocol version is bumped consistently across backend, tests, and frontend.
+
 ### Key management
 
 | Layer | Protects | Key env var |
@@ -104,6 +119,7 @@ v1 single-layer envelopes (`alg: "AES-256-GCM"`) are still accepted for decrypti
 | At-rest | Config, forensics, dynamic rules, kernel status in Redis | `AUTODEFENSE_DATA_KEY_B64` |
 | Sealed transport | Client-to-backend request payloads | `AUTODEFENSE_TRANSPORT_KEY_B64` |
 
+- Each env var holds **one** master; **three** subkeys are always derived from it as in the table above (same algorithm for data and transport managers).
 - Keys are base64-encoded 32-byte (256-bit) values
 - Backend uses the audited Python `cryptography` library (`AESGCM`, `HKDF`)
 - Frontend uses the Web Crypto API (`AES-GCM`, `HKDF`, `HMAC`) — browser-native, no JS crypto libraries

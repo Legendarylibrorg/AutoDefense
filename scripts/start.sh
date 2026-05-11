@@ -8,6 +8,17 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+compose() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+  else
+    echo "Docker Compose is required: install the Compose V2 plugin (docker compose) or docker-compose." >&2
+    exit 1
+  fi
+}
+
 if [ ! -f .env ]; then
   cp .env.example .env
 fi
@@ -37,15 +48,20 @@ gen_token() {
 }
 
 # Fill an empty key variable in .env with a freshly generated value.
+# "Empty" means missing value after = (optional trailing whitespace only counts as empty).
 fill_key() {
   var="$1"
   generator="$2"
-  if grep -q "^${var}=.\+" .env 2>/dev/null; then
+  if grep -qE "^${var}=.+$" .env 2>/dev/null; then
     return 0
   fi
   key=$($generator)
-  tmp=$(mktemp)
-  sed "s|^${var}=.*|${var}=${key}|" .env > "$tmp" && mv "$tmp" .env
+  tmp=$(mktemp "${TMPDIR:-/tmp}/autodefense.XXXXXX") || exit 1
+  if ! sed "s|^${var}=.*|${var}=${key}|" .env >"$tmp"; then
+    rm -f "$tmp"
+    exit 1
+  fi
+  mv "$tmp" .env
   echo "Generated ${var}"
 }
 
@@ -57,8 +73,11 @@ fill_key AUTODEFENSE_REDIS_PASSWORD     gen_token
 
 echo ""
 echo "=============================="
-echo "  API Key (save this): $(grep '^AUTODEFENSE_API_KEY=' .env | cut -d= -f2)"
+echo "  API Key (save this): $(grep '^AUTODEFENSE_API_KEY=' .env | cut -d= -f2-)"
 echo "=============================="
 echo ""
 
-docker compose up --build
+# Fail fast if compose file or env is invalid (before a long image build).
+compose config -q
+
+compose up --build

@@ -8,7 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- GitHub ruleset default required checks: use **job `name:`** contexts (`Python 3.11`, etc.) so branch protection matches Actions check runs (not `Workflow / job` strings).
+- **`scripts/start.sh` / `scripts/start.ps1`:** Use **`docker compose`** or fall back to **`docker-compose`**; run **`compose config -q`** before **`up`** so bad `.env` / Compose files fail fast; portable empty-value checks (`grep -E`); print API keys with **`cut -f2-`** so values containing `=` are not truncated. PowerShell writes UTF-8 `.env` with a trailing newline, uses a StrictMode-safe compose wrapper, and **`exit`s** with the same code as Compose.
+
+### Documentation
+
+- [docs/setup.md](docs/setup.md): clone → `.env` → Docker (`start.sh`), local backend/frontend, uv/pytest, host scanners; links to encryption and configuration docs.
+- [docs/security.md](docs/security.md), [docs/configuration.md](docs/configuration.md), [docs/api.md](docs/api.md), [docs/architecture.md](docs/architecture.md), [README.md](README.md): clarify **three** HKDF-SHA256 subkeys per 32-byte master and **four** independent decrypt checks (not a fourth subkey); document backend vs bundled-dashboard HKDF salt handling for sealed transport.
+- [docs/deployment.md](docs/deployment.md), [docs/scanners.md](docs/scanners.md): host scanners require repo `scanners/` on `PYTHONPATH` / run from repo root; systemd/cron examples updated.
+- [.env.example](.env.example) and [frontend/.env.example](frontend/.env.example): encryption comments aligned with the three-subkey design.
 
 ### Added
 

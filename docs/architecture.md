@@ -154,6 +154,8 @@ flowchart TB
     Events --> Dashboard
 ```
 
+Each encrypted blob uses **one** random-data master per domain (transport vs at-rest) configured in env. From that master, **three** HKDF-SHA256 outputs (`key_inner`, `key_outer`, `key_hmac`) are produced — **no fourth HKDF subkey**. On decrypt, four **verification steps** run (outer GCM tag, inner GCM tag, HMAC, SHA-256 of plaintext). Details: [Security](security.md#encryption).
+
 ## Technology stack
 
 | Layer | Technology |

@@ -1,6 +1,6 @@
 # Host Security Scanners
 
-AUTO DEFENSE includes three standalone host security scanners — one per platform. Each is a single Python file with **zero external dependencies** (stdlib only), runs anywhere Python 3.8+ is installed, and POSTs structured findings to the backend.
+AUTO DEFENSE includes three host security scanners — **Linux** (`kernel/scanner.py`), **macOS** (`macos/scanner.py`), and **Windows** (`windows/scanner.py`). They use the Python standard library plus a small shared module at **`scanners/finding.py`** in this repository. Run scanners from the **repository root** (or set `PYTHONPATH` to the repo root) so `from scanners.finding import finding` works. They POST structured findings to the backend.
 
 ## Architecture
 

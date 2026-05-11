@@ -1,5 +1,7 @@
 # Deployment
 
+Step-by-step from clone (including `.env` and encryption keys): **[Setup from Git clone](setup.md)**.
+
 ## Prerequisites
 
 - **Docker** (Docker Desktop or Docker Engine with Compose V2)
@@ -61,21 +63,23 @@ docker compose --profile security up kernel-scanner
 ### Backend
 
 ```bash
-# Create virtual environment
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate    # macOS/Linux
 # .venv\Scripts\activate     # Windows
 
-# Install with dev dependencies
-pip install -e "backend[dev]"
+pip install -e ".[dev]"
 
 # Start Redis (required)
 docker run -d --name redis -p 6379:6379 redis:7-alpine
 
-# Run backend
-cd backend
+# If .env still uses docker hostname `redis`, override for localhost:
+export AUTODEFENSE_REDIS_URL=redis://127.0.0.1:6379/0
+
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Or with **uv** from `backend/`: `uv sync --all-extras` then `uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`.
 
 ### Frontend
 
@@ -90,12 +94,11 @@ Opens at `http://localhost:3000`. Vite proxies API calls to `http://localhost:80
 ### Run tests
 
 ```bash
-# Backend tests (uses fakeredis, no real Redis needed)
 cd backend
-pytest -q
+python -m pytest tests/ -q
 
 # With coverage
-pytest --cov=app --cov-report=term-missing
+python -m pytest tests/ --cov=app --cov-report=term-missing
 ```
 
 ### Lint
@@ -108,18 +111,14 @@ ruff format --check .
 
 ## Host scanner deployment
 
-The host scanners are standalone Python scripts with zero dependencies. They can be deployed in several ways:
+The host scanners are Python scripts under `kernel/`, `macos/`, and `windows/`. They import **`scanners/finding.py`** from the repository — run them from the **repo root** (or set `PYTHONPATH` to the repo root) so `import scanners.finding` resolves. Standard library only besides that shared module.
 
 ### Manual (any platform)
 
 ```bash
-# Linux
+cd /path/to/AutoDefense   # repository root
 python3 kernel/scanner.py --post http://your-backend:8000 --api-key YOUR_KEY --loop 120
-
-# macOS
 python3 macos/scanner.py --post http://your-backend:8000 --api-key YOUR_KEY --loop 120
-
-# Windows
 python windows\scanner.py --post http://your-backend:8000 --api-key YOUR_KEY --loop 120
 ```
 
@@ -128,8 +127,8 @@ The `--api-key` flag (or `AUTODEFENSE_API_KEY` in the environment) is required w
 ### Cron (Linux/macOS)
 
 ```bash
-# Every 2 minutes
-*/2 * * * * /usr/bin/python3 /path/to/kernel/scanner.py --post http://backend:8000 >> /var/log/autodefense-scanner.log 2>&1
+# Every 2 minutes — run from repo root so `scanners/` is importable
+*/2 * * * * cd /opt/autodefense && /usr/bin/python3 kernel/scanner.py --post http://backend:8000 >> /var/log/autodefense-scanner.log 2>&1
 ```
 
 ### Systemd timer (Linux)
@@ -141,6 +140,8 @@ Description=AUTO DEFENSE kernel scanner
 
 [Service]
 Type=oneshot
+Environment=PYTHONPATH=/opt/autodefense
+WorkingDirectory=/opt/autodefense
 ExecStart=/usr/bin/python3 /opt/autodefense/kernel/scanner.py --post http://backend:8000
 ```
 
@@ -211,7 +212,7 @@ AUTO DEFENSE/
 ├── README.md                 # Project entry point
 ├── docker-compose.yml        # All services
 ├── docs/                     # Documentation
-│   ├── architecture.md       # System design
+│   ├── setup.md              # Clone → env → Docker / local dev
 │   ├── api.md                # API reference
 │   ├── security.md           # Threat model & OWASP coverage
 │   ├── scanners.md           # Host scanner docs
@@ -241,6 +242,7 @@ AUTO DEFENSE/
 │       ├── components/       # UI components
 │       ├── lib/              # API client + WebSocket hook
 │       └── pages/            # App layout
+├── scanners/               # Shared scanner helpers (imported by kernel/macos/windows)
 ├── kernel/                   # Linux scanner
 │   ├── Dockerfile
 │   └── scanner.py

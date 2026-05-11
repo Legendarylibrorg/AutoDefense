@@ -1,5 +1,7 @@
 # Security
 
+**Scope:** This document describes how the **implemented system** is designed to behave. OWASP tables indicate whether a threat category has **runtime mitigations in this codebase**, is **partially** addressed, or is **out of scope** (handled elsewhere or not covered). Nothing here is a guarantee of security in your environment; combine with updates, monitoring, and your own assessments.
+
 ## Threat model
 
 ### Attacker goals
@@ -153,7 +155,7 @@ The `ArtifactAgent` defends against SSRF at three levels:
 |---|--------|--------|----------------|
 | 1 | Prompt Injection | Defended | SentinelAgent: multi-layer injection and jailbreak detection with NFKC Unicode normalization, encoding evasion analysis, multi-language support. PolicyAgent: configurable regexes. Self-healing: auto-generates blocking rules. |
 | 2 | Sensitive Information Disclosure | Defended | BehaviorAgent: cloud credential, VCS token, database URI, and generic API key detection. PII detectors for common formats. System prompt leak indicators. All auto-redacted. |
-| 3 | Supply Chain | Out of scope | Build-time concern (not a runtime defense). Dependabot enabled for dependency scanning. |
+| 3 | Supply Chain | Out of scope (runtime) | Runtime cannot fully mitigate compromised upstream packages. **Mitigation in this repo:** `.github/dependabot.yml` proposes dependency updates; repository maintainers should enable [Dependabot security updates](https://docs.github.com/en/code-security/dependabot/dependabot-security-updates/about-dependabot-security-updates) and review changelogs for their deployments. |
 | 4 | Data and Model Poisoning | Out of scope | Training-time concern |
 | 5 | Improper Output Handling | Defended | BehaviorAgent: output injection detection (XSS, event handlers, iframes, eval, markdown injection, data URIs) |
 | 6 | Excessive Agency | Defended | BehaviorAgent: extensive tool abuse and code execution detection covering destructive ops, shell execution, privilege escalation, container escape, cloud infra, network tools |
@@ -198,24 +200,21 @@ The `ArtifactAgent` defends against SSRF at three levels:
 - SSRF detection with numeric IP resolution and async DNS rebinding detection
 - Phishing detection with link density analysis
 
-## Red team audit history
+## Security-focused development history
 
-The codebase has undergone six rounds of adversarial security review:
+During iterative development, several passes addressed concrete issues (crypto edge cases, SSRF, DoS limits, WebSocket auth, ReDoS on dynamic rules, etc.). The table below is a **historical log of engineering themes**, not an external penetration-test report or certification.
 
-| Round | Key fixes |
-|-------|-----------|
-| R1 | `alg:none` crypto downgrade rejection, constant-time API key comparison, NFKC Unicode normalization, SSRF numeric IP detection |
+| Pass | Themes addressed (examples) |
+|------|----------------------------|
+| R1 | `alg:none` downgrade rejection, constant-time API key comparison, NFKC Unicode normalization, SSRF numeric IP parsing |
 | R2 | Archive bomb multi-entry scanning, body size limit middleware, WebSocket timeouts, scanner HMAC authentication |
-| R3 | Forensics stores sanitized input (not raw), tool call JSON serialization for pattern matching, Dependabot integration |
-| R4 | Redis healthcheck password leak fix, chunked body size enforcement, SSRF DNS rebinding detection, dynamic rules ReDoS validation, WebSocket `Sec-WebSocket-Protocol` auth, Nginx security header inheritance, `/health` info redaction |
-| R5 | Self-healing pipeline fix (dynamic rules now actually loaded/applied), `ConfigStore` ReDoS validation, async DNS resolution for SSRF (non-blocking), WebSocket query param auth fallback removed |
-| R6 | `asyncio.get_running_loop()` fix, baseline policy caching, final clean audit (no MEDIUM+ findings) |
+| R3 | Forensics stores sanitized input (not raw), tool call JSON serialization for pattern matching, dependency update automation via Dependabot config in-repo |
+| R4 | Redis healthcheck password exposure addressed, chunked body size enforcement, SSRF DNS rebinding checks, dynamic rules ReDoS validation, WebSocket `Sec-WebSocket-Protocol` auth, Nginx security header inheritance, `/health` info redaction |
+| R5 | Self-healing pipeline wired so dynamic rules load per request, `ConfigStore` ReDoS validation, async DNS for SSRF (non-blocking), WebSocket query-string auth removed |
+| R6 | `asyncio.get_running_loop()` usage fix, baseline policy caching, review pass closing tracked findings from earlier rounds |
+
+Severity labels in older notes were **informal** and not tied to a published external rubric.
 
 ## Reporting a vulnerability
 
-If you discover a security issue, open a private report including:
-- The affected service and endpoint
-- Exact request payload to reproduce
-- Observed vs expected behavior
-- Impact assessment
-- Suggested fix (if any)
+Do **not** file unfixed vulnerabilities as public issues. Follow **[SECURITY.md](../SECURITY.md)** in the repository root (private GitHub reporting preferred when enabled).

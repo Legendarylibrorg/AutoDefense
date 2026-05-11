@@ -14,7 +14,7 @@ This creates or updates the ruleset **`AutoDefense: protect main`** with:
 
 - Block **branch deletion** and **force-push** (`non_fast_forward`)
 - **Pull request required** before merging to `main` (no direct pushes)
-- **Required status checks** (strict): Backend CI (Python 3.11 & 3.12) and Frontend CI (Node 20 & 22)
+- **Required status checks** (strict): `Python 3.11`, `Python 3.12`, `Node 20`, and `Node 22` — these are the **job `name:`** values from `.github/workflows/backend-ci.yml` and `frontend-ci.yml` (what GitHub lists as the check name), not `Workflow title / job`.
 
 ### Environment overrides
 
@@ -23,7 +23,7 @@ This creates or updates the ruleset **`AutoDefense: protect main`** with:
 | `DEFAULT_BRANCH` | `main` | Branch to protect |
 | `REQUIRED_APPROVALS` | `0` | Approving reviews before merge; use `1` or more for teams |
 | `REQUIRE_CODEOWNERS` | `0` | Set `1` only with real entries in `.github/CODEOWNERS` |
-| `CONTEXTS_JSON` | (built-in) | JSON array of `{ "context": "Workflow / Job" }` if job names change |
+| `CONTEXTS_JSON` | (built-in) | JSON array of `{ "context": "<job name>" }` matching each required workflow job’s `name:` field |
 
 **First-time setup:** merge at least one PR so the four required checks exist on GitHub; otherwise the UI may not list them when editing the ruleset.
 

@@ -36,7 +36,9 @@ case "$REQUIRE_CODEOWNERS" in 1 | true | yes) co_json=true ;; *) co_json=false ;
 case "$REQUIRE_CONVERSATIONS_RESOLVED" in 1 | true | yes) rt_json=true ;; *) rt_json=false ;; esac
 
 # Single-line default so every /bin/sh passes valid JSON to jq --argjson.
-_default_contexts='[{"context":"Backend CI / Python 3.11"},{"context":"Backend CI / Python 3.12"},{"context":"Frontend CI / Node 20"},{"context":"Frontend CI / Node 22"}]'
+# Contexts must match each workflow job's `name:` (GitHub Actions check run name),
+# not "Workflow file title / job".
+_default_contexts='[{"context":"Python 3.11"},{"context":"Python 3.12"},{"context":"Node 20"},{"context":"Node 22"}]'
 CONTEXTS_JSON="${CONTEXTS_JSON:-$_default_contexts}"
 
 reviews_raw="${REQUIRED_APPROVALS:-0}"

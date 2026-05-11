@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- GitHub ruleset default required checks: use **job `name:`** contexts (`Python 3.11`, etc.) so branch protection matches Actions check runs (not `Workflow / job` strings).
+
 ### Added
 
 - [docs/maintainers/github-repository-setup.md](docs/maintainers/github-repository-setup.md) and [scripts/configure-github-ruleset-main.sh](scripts/configure-github-ruleset-main.sh) to enforce **PR-only updates to `main`** via GitHub rulesets (with required CI checks).

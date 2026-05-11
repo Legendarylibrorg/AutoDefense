@@ -7,7 +7,7 @@ from redis.asyncio import Redis
 
 from app.core.event_bus import EventBus
 from app.core.models import AnalyzeRequest, Event, ThreatType
-from app.core.rules_store import RulesStore
+from app.core.rules_store import DynamicRules, RulesStore
 from app.settings import settings
 
 
@@ -17,28 +17,8 @@ class SelfHealingEngine:
         self.bus = EventBus(redis)
         self.store = RulesStore(redis)
 
-    async def ingest_incident(
-        self, *, req: AnalyzeRequest, decision: dict[str, Any]
-    ) -> dict[str, Any]:
-        if not settings.self_heal_enabled:
-            return {"patches": []}
-
-        await self.bus.publish(
-            Event(
-                type="incident.detected",
-                trace_id=req.trace_id,
-                session_id=req.session_id,
-                payload={
-                    "risk_score": decision.get("risk_score"),
-                    "action": decision.get("action"),
-                    "top_reasons": decision.get("explain", {}).get("top_reasons", []),
-                },
-            )
-        )
-
+    def _build_patches(self, dyn: DynamicRules, req: AnalyzeRequest, decision: dict[str, Any]) -> list[dict[str, Any]]:
         patches: list[dict[str, Any]] = []
-        dyn = await self.store.load()
-
         threats = decision.get("explain", {}).get("threat_types", [])
         text = (req.user_input or "")[:2000]
 
@@ -94,20 +74,40 @@ class SelfHealingEngine:
                     }
                 )
 
-        dyn.injection_regex_append = dyn.injection_regex_append[
-            : settings.self_heal_max_rule_growth
-        ]
+        dyn.injection_regex_append = dyn.injection_regex_append[: settings.self_heal_max_rule_growth]
         dyn.exfil_regex_append = dyn.exfil_regex_append[: settings.self_heal_max_rule_growth]
+        return patches
 
-        if patches:
-            dyn.version += 1
-            await self.store.save(dyn)
+    async def ingest_incident(
+        self, *, req: AnalyzeRequest, decision: dict[str, Any]
+    ) -> dict[str, Any]:
+        if not settings.self_heal_enabled:
+            return {"patches": []}
+
+        await self.bus.publish(
+            Event(
+                type="incident.detected",
+                trace_id=req.trace_id,
+                session_id=req.session_id,
+                payload={
+                    "risk_score": decision.get("risk_score"),
+                    "action": decision.get("action"),
+                    "top_reasons": decision.get("explain", {}).get("top_reasons", []),
+                },
+            )
+        )
+
+        patches, new_version = await self.store.merge_update(
+            lambda dyn: self._build_patches(dyn, req, decision)
+        )
+
+        if patches and new_version is not None:
             await self.bus.publish(
                 Event(
                     type="self_heal.applied",
                     trace_id=req.trace_id,
                     session_id=req.session_id,
-                    payload={"patches": patches, "rules_version": dyn.version},
+                    payload={"patches": patches, "rules_version": new_version},
                 )
             )
 

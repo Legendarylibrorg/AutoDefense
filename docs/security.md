@@ -25,7 +25,7 @@
 ├─────────────────────────────────────────────────┤
 │  API key authentication (constant-time)         │  ← Layer 2: AuthN
 ├─────────────────────────────────────────────────┤
-│  Rate limiting (per-IP, LRU-bounded)            │  ← Layer 3: DoS prevention
+│  Rate limiting (per-IP, Redis fixed-window)      │  ← Layer 3: DoS prevention
 ├─────────────────────────────────────────────────┤
 │  Body size limits (Content-Length + chunked)     │  ← Layer 4: Input bounds
 ├─────────────────────────────────────────────────┤
@@ -108,7 +108,7 @@ v1 single-layer envelopes (`alg: "AES-256-GCM"`) are still accepted for decrypti
 - Backend uses the audited Python `cryptography` library (`AESGCM`, `HKDF`)
 - Frontend uses the Web Crypto API (`AES-GCM`, `HKDF`, `HMAC`) — browser-native, no JS crypto libraries
 - AAD (Additional Authenticated Data) binds ciphertext to its context (e.g., `"analyze"`, `"scan"`, `"runtime_config"`)
-- If `AUTODEFENSE_DATA_KEY_B64` is empty, the backend generates an ephemeral key (data lost on restart)
+- If `AUTODEFENSE_DATA_KEY_B64` is empty **and** `AUTODEFENSE_ENVIRONMENT` is `local`, the backend generates an ephemeral at-rest key (data lost on restart). Outside `local`, an empty data key with encryption enabled prevents startup.
 - If `AUTODEFENSE_TRANSPORT_KEY_B64` is empty, sealed endpoints return 400
 
 To generate a key manually:
@@ -119,14 +119,14 @@ openssl rand -base64 32
 
 ### Scanner payload integrity
 
-Host scanners (Linux, macOS, Windows) sign their POST payloads with HMAC-SHA256 using `AUTODEFENSE_SCANNER_HMAC_KEY`. The backend verifies the signature on the raw request body before processing.
+Host scanners (Linux, macOS, Windows) sign their POST payloads with HMAC-SHA256 using `AUTODEFENSE_SCANNER_HMAC_KEY`. The backend verifies the signature on the raw request body before processing when that key is configured. Outside `local`, `POST /scan/kernel` is rejected if the scanner HMAC key is unset so unsigned ingest cannot be mistaken for a verified scan.
 
 ## Authentication
 
 - **HTTP endpoints**: Bearer token in `Authorization` header, verified with `hmac.compare_digest()` (constant-time)
 - **WebSocket**: API key passed via `Sec-WebSocket-Protocol: auth.<key>` header (never in URL query parameters — prevents logging/caching leaks)
 - **Public endpoints** (`/health`, `/docs`, `/openapi.json`, `/redoc`): no authentication required
-- **Disabled auth warning**: if `AUTODEFENSE_API_KEY` is unset, all endpoints are unauthenticated (startup warning logged)
+- **Disabled auth warning**: if `AUTODEFENSE_API_KEY` is unset in `local`, all endpoints are unauthenticated (startup warning logged). Outside `local`, startup fails until an API key is set.
 
 ## Input validation hardening
 
@@ -162,7 +162,7 @@ The `ArtifactAgent` defends against SSRF at three levels:
 | 7 | System Prompt Leakage | Defended | SentinelAgent: input-side extraction blocking. BehaviorAgent: output-side leak detection. |
 | 8 | Vector and Embedding Weaknesses | Out of scope | RAG-specific (no vector database in this system) |
 | 9 | Misinformation | Out of scope | Requires fact-checking capability |
-| 10 | Unbounded Consumption | Defended | Rate limiting (120 req/min/IP with LRU eviction), 10 MB body limit (Content-Length + chunked), Pydantic size constraints, artifact caps (50 per request), SSE/WebSocket connection limits and timeouts |
+| 10 | Unbounded Consumption | Defended | Rate limiting (120 req/min/IP, Redis-backed fixed window with bounded in-memory fallback on Redis errors), 10 MB body limit (Content-Length + chunked), Pydantic size constraints, artifact caps (50 per request), SSE/WebSocket connection limits and timeouts |
 
 ## OWASP Agentic AI Top 10 (2026) coverage
 

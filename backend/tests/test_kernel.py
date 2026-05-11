@@ -200,3 +200,26 @@ async def test_kernel_status_decrypt_failure_not_marked_scanned(
     data = res2.json()
     assert data["scanned"] is False
     assert data.get("kernel_status_unavailable") is True
+
+
+async def test_kernel_scan_rejected_outside_local_without_scanner_hmac(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
+    monkeypatch.setattr(settings, "scanner_hmac_key", None)
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
+    monkeypatch.setattr(settings, "transport_seal_enabled", False)
+    app = create_app()
+    fake = FakeRedis()
+    app.dependency_overrides[get_redis] = lambda: fake
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {TEST_API_KEY}"},
+    ) as c:
+        res = await c.post(
+            "/scan/kernel",
+            json=_kernel_payload(),
+            headers={"Content-Type": "application/json"},
+        )
+    assert res.status_code == 503

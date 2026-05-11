@@ -64,19 +64,26 @@ def _memory_rate_limit_allow(client: str, bucket: int, limit: int) -> bool:
         return n <= limit
 
 
-def _enforce_production_secrets() -> None:
-    """Fail closed in deployed environments: require shared secrets at startup."""
-    if settings.environment.strip().lower() not in _PRODUCTION_LIKE_ENVS:
-        return
-    if not settings.api_key:
+def _enforce_runtime_secrets() -> None:
+    """Fail closed outside local: require API key; production-like envs need scanner HMAC."""
+    env = settings.environment.strip().lower()
+
+    if not settings.is_local and not settings.api_key:
         raise RuntimeError(
-            "AUTODEFENSE_API_KEY is required when AUTODEFENSE_ENVIRONMENT is "
-            "production, staging, or prod."
+            "AUTODEFENSE_API_KEY is required unless AUTODEFENSE_ENVIRONMENT is local."
         )
-    if not settings.scanner_hmac_key:
+
+    if env in _PRODUCTION_LIKE_ENVS:
+        if not settings.scanner_hmac_key:
+            raise RuntimeError(
+                "AUTODEFENSE_SCANNER_HMAC_KEY is required when AUTODEFENSE_ENVIRONMENT is "
+                "production, staging, or prod."
+            )
+
+    if not settings.is_local and settings.data_encryption_enabled and not settings.data_key_b64:
         raise RuntimeError(
-            "AUTODEFENSE_SCANNER_HMAC_KEY is required when AUTODEFENSE_ENVIRONMENT is "
-            "production, staging, or prod."
+            "AUTODEFENSE_DATA_KEY_B64 is required when AUTODEFENSE_DATA_ENCRYPTION_ENABLED is true "
+            "and AUTODEFENSE_ENVIRONMENT is not local."
         )
 
 
@@ -122,9 +129,9 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """
-    Bearer-token authentication for all mutating / sensitive endpoints.
-    Read-only /health and docs are exempt.  When no API key is configured
-    (e.g. local dev), auth is disabled with a startup warning.
+    Bearer-token authentication for all non-public HTTP routes when an API key is set.
+    `/health`, `/docs`, `/openapi.json`, and `/redoc` are exempt. When no API key is
+    configured (e.g. local dev), auth is disabled with a startup warning.
     """
 
     def __init__(self, app, *, api_key: str | None):
@@ -200,7 +207,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         except Exception as exc:
             logging.getLogger("autodefense").warning(
                 "Rate limit Redis check failed; using in-memory fallback (%s)",
-                exc,
+                type(exc).__name__,
                 extra={"event_type": "ratelimit", "action": "memory_fallback"},
             )
             if not _memory_rate_limit_allow(client, bucket, self._fallback_limit):
@@ -239,15 +246,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 def create_app() -> FastAPI:
     configure_logging(settings.log_level)
-    _enforce_production_secrets()
+    _enforce_runtime_secrets()
     logger = logging.getLogger("autodefense")
 
     if settings.data_encryption_enabled and not settings.data_key_b64:
-        settings.data_key_b64 = base64.b64encode(os.urandom(32)).decode("ascii")
-        logger.warning(
-            "AUTODEFENSE_DATA_KEY_B64 not set; generated ephemeral at-rest key (data won't survive restarts)",
-            extra={"event_type": "crypto", "action": "ephemeral_key_generated"},
-        )
+        if settings.is_local:
+            settings.data_key_b64 = base64.b64encode(os.urandom(32)).decode("ascii")
+            logger.warning(
+                "AUTODEFENSE_DATA_KEY_B64 not set; generated ephemeral at-rest key "
+                "(data won't survive restarts)",
+                extra={"event_type": "crypto", "action": "ephemeral_key_generated"},
+            )
 
     if settings.transport_seal_enabled and not settings.transport_key_b64:
         logger.warning(
@@ -288,8 +297,8 @@ def create_app() -> FastAPI:
         title="Autonomous AI Defense System",
         version="0.2.0",
         lifespan=lifespan,
-        docs_url="/docs" if settings.environment == "local" else None,
-        redoc_url="/redoc" if settings.environment == "local" else None,
+        docs_url="/docs" if settings.is_local else None,
+        redoc_url="/redoc" if settings.is_local else None,
     )
 
     # Middleware order: outermost first → innermost last.
@@ -307,18 +316,23 @@ def create_app() -> FastAPI:
         expose_headers=["Retry-After"],
     )
 
-    # Sanitise validation errors — hide field internals (M fix)
+    # Sanitise validation errors — hide field internals outside local
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_req: Request, exc: RequestValidationError):
-        safe_errors = []
-        for err in exc.errors():
-            safe_errors.append(
-                {
-                    "field": " → ".join(str(part) for part in err.get("loc", [])),
-                    "message": err.get("msg", "validation error"),
-                }
-            )
-        return JSONResponse(status_code=422, content={"detail": safe_errors})
+        if settings.is_local:
+            safe_errors = []
+            for err in exc.errors():
+                safe_errors.append(
+                    {
+                        "field": " → ".join(str(part) for part in err.get("loc", [])),
+                        "message": err.get("msg", "validation error"),
+                    }
+                )
+            return JSONResponse(status_code=422, content={"detail": safe_errors})
+        return JSONResponse(
+            status_code=422,
+            content={"detail": "Invalid request body"},
+        )
 
     app.include_router(api_router)
     return app

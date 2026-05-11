@@ -5,9 +5,10 @@ import logging
 import re
 import threading
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from redis.asyncio import Redis
+from redis.exceptions import WatchError
 
 from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
 from app.settings import settings
@@ -68,8 +69,7 @@ class RulesStore:
             settings.data_key_b64 if settings.data_encryption_enabled else None
         )
 
-    async def load(self) -> DynamicRules:
-        raw = await self.redis.get(self.KEY)
+    def _decode_from_raw(self, raw: str | bytes | None) -> DynamicRules:
         if not raw:
             return DynamicRules(version=1, injection_regex_append=[], exfil_regex_append=[])
         if isinstance(raw, (bytes, bytearray)):
@@ -77,13 +77,20 @@ class RulesStore:
         data = json.loads(raw)
         if isinstance(data, dict) and data.get("alg") in STORE_ENVELOPE_ALGS:
             data = self.crypto.decrypt_json(data, aad=b"dynamic_rules")
+        if not isinstance(data, dict):
+            data = {}
         return DynamicRules(
             version=int(data.get("version", 1)),
             injection_regex_append=_filter_safe_regexes(data.get("injection_regex_append", [])),
             exfil_regex_append=_filter_safe_regexes(data.get("exfil_regex_append", [])),
         )
 
+    async def load(self) -> DynamicRules:
+        raw = await self.redis.get(self.KEY)
+        return self._decode_from_raw(raw)
+
     async def save(self, rules: DynamicRules) -> None:
+        """Replace stored rules (prefer merge_update for concurrent writers)."""
         payload: dict[str, Any] = {
             "version": rules.version,
             "injection_regex_append": rules.injection_regex_append,
@@ -91,3 +98,37 @@ class RulesStore:
         }
         wrapped = self.crypto.encrypt_json(payload, aad=b"dynamic_rules")
         await self.redis.set(self.KEY, json.dumps(wrapped, ensure_ascii=False))
+
+    async def merge_update(
+        self, mutator: Callable[[DynamicRules], list[dict[str, Any]]]
+    ) -> tuple[list[dict[str, Any]], int | None]:
+        """
+        Optimistic concurrency: load rules under WATCH, apply mutator (may append to lists),
+        bump version and save; retry on concurrent writers.
+        Returns (patches_applied, new_version) or ([], None) if nothing to save or retries exhausted.
+        """
+        for _ in range(16):
+            try:
+                async with self.redis.pipeline(transaction=True) as pipe:
+                    await pipe.watch(self.KEY)
+                    raw = await pipe.get(self.KEY)
+                    dyn = self._decode_from_raw(raw)
+                    patches = mutator(dyn)
+                    if not patches:
+                        await pipe.unwatch()
+                        return [], None
+                    dyn.version += 1
+                    payload: dict[str, Any] = {
+                        "version": dyn.version,
+                        "injection_regex_append": dyn.injection_regex_append,
+                        "exfil_regex_append": dyn.exfil_regex_append,
+                    }
+                    wrapped = self.crypto.encrypt_json(payload, aad=b"dynamic_rules")
+                    pipe.multi()
+                    pipe.set(self.KEY, json.dumps(wrapped, ensure_ascii=False))
+                    await pipe.execute()
+                    return patches, dyn.version
+            except WatchError:
+                continue
+        logger.error("Dynamic rules merge failed after watch retries")
+        return [], None

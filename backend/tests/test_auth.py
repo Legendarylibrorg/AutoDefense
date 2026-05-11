@@ -74,6 +74,7 @@ def test_production_requires_api_key(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "environment", "production")
     monkeypatch.setattr(settings, "api_key", None)
     monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
     with pytest.raises(RuntimeError, match="AUTODEFENSE_API_KEY"):
         create_app()
 
@@ -82,7 +83,27 @@ def test_production_requires_scanner_hmac(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "environment", "production")
     monkeypatch.setattr(settings, "api_key", "api-secret")
     monkeypatch.setattr(settings, "scanner_hmac_key", None)
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
     with pytest.raises(RuntimeError, match="AUTODEFENSE_SCANNER_HMAC_KEY"):
+        create_app()
+
+
+def test_development_requires_api_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "development")
+    monkeypatch.setattr(settings, "api_key", None)
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
+    with pytest.raises(RuntimeError, match="AUTODEFENSE_API_KEY"):
+        create_app()
+
+
+def test_staging_requires_data_key_when_encryption_on(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "staging")
+    monkeypatch.setattr(settings, "api_key", "api-secret")
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "data_encryption_enabled", True)
+    monkeypatch.setattr(settings, "data_key_b64", None)
+    with pytest.raises(RuntimeError, match="AUTODEFENSE_DATA_KEY_B64"):
         create_app()
 
 

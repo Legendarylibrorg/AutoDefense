@@ -32,6 +32,8 @@ All three scanners share the same CLI interface:
 python3 <scanner> [--post URL] [--loop SECONDS] [--json]
 ```
 
+**Backend contract:** scanners POST to `{backend_base}/scan/kernel` (same origin as other REST routes; no extra URL prefix in the default app). The backend verifies `X-Scanner-Signature` over the raw JSON body when `AUTODEFENSE_SCANNER_HMAC_KEY` is set. Match `--hmac-key` / `SCANNER_HMAC_KEY` to that env var on the server. Outside `local`, the API refuses unsigned kernel ingest if the HMAC key is unset.
+
 | Flag | Purpose |
 |------|---------|
 | `--post URL` | POST results to the backend (e.g., `http://localhost:8000`) |

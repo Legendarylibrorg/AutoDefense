@@ -35,7 +35,7 @@ def _platform_info() -> dict:
     from app.settings import settings as _settings
 
     plat = platform.system().lower()
-    is_local = _settings.environment == "local"
+    is_local = _settings.is_local
     info: dict = {
         "os": plat,
         "os_pretty": platform.platform() if is_local else plat,

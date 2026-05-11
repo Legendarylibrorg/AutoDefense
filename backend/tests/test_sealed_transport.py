@@ -10,7 +10,9 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 def seal(obj: dict, *, aad: bytes) -> dict:
     key = b"\x00" * 32
     nonce = b"\x01" * 12
-    raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=False).encode("utf-8")
+    raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=False).encode(
+        "utf-8"
+    )
     sha256 = hashlib.sha256(raw).hexdigest()
     ct = AESGCM(key).encrypt(nonce, raw, aad)
     return {
@@ -36,4 +38,3 @@ async def test_analyze_sealed_roundtrip(client):
     assert res.status_code == 200
     body = res.json()
     assert "risk_score" in body
-

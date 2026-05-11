@@ -33,9 +33,7 @@ class KernelAgent:
         signals: list[AgentSignal] = []
 
         for f in findings:
-            score, confidence = SEVERITY_SCORE.get(
-                f.severity, (0.0, 0.5)
-            )
+            score, confidence = SEVERITY_SCORE.get(f.severity, (0.0, 0.5))
             if score == 0.0:
                 continue
 

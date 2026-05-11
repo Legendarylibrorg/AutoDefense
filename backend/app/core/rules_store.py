@@ -9,7 +9,7 @@ from typing import Any
 
 from redis.asyncio import Redis
 
-from app.core.crypto import CryptoManager
+from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
 from app.settings import settings
 
 logger = logging.getLogger("autodefense.rules_store")
@@ -64,7 +64,9 @@ class RulesStore:
 
     def __init__(self, redis: Redis):
         self.redis = redis
-        self.crypto = CryptoManager(settings.data_key_b64 if settings.data_encryption_enabled else None)
+        self.crypto = CryptoManager(
+            settings.data_key_b64 if settings.data_encryption_enabled else None
+        )
 
     async def load(self) -> DynamicRules:
         raw = await self.redis.get(self.KEY)
@@ -73,7 +75,7 @@ class RulesStore:
         if isinstance(raw, (bytes, bytearray)):
             raw = raw.decode("utf-8", errors="replace")
         data = json.loads(raw)
-        if isinstance(data, dict) and data.get("alg") in ("AES-256-GCM", "none"):
+        if isinstance(data, dict) and data.get("alg") in STORE_ENVELOPE_ALGS:
             data = self.crypto.decrypt_json(data, aad=b"dynamic_rules")
         return DynamicRules(
             version=int(data.get("version", 1)),
@@ -89,4 +91,3 @@ class RulesStore:
         }
         wrapped = self.crypto.encrypt_json(payload, aad=b"dynamic_rules")
         await self.redis.set(self.KEY, json.dumps(wrapped, ensure_ascii=False))
-

@@ -28,5 +28,6 @@ async def test_analyze_injection_blocks_or_sanitizes(client):
     # Deterministic detection should raise risk and never be a plain allow.
     assert body["risk_score"] >= 50
     assert body["action"] in ("sanitize", "block_isolate")
-    assert any(s["threat_type"] in ("prompt_injection", "policy_violation") for s in body["signals"])
-
+    assert any(
+        s["threat_type"] in ("prompt_injection", "policy_violation") for s in body["signals"]
+    )

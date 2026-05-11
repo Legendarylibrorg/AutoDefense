@@ -70,7 +70,24 @@ async def test_health_is_public(authed_app):
     assert res.status_code == 200
 
 
+def test_production_requires_api_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "api_key", None)
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    with pytest.raises(RuntimeError, match="AUTODEFENSE_API_KEY"):
+        create_app()
+
+
+def test_production_requires_scanner_hmac(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "api_key", "api-secret")
+    monkeypatch.setattr(settings, "scanner_hmac_key", None)
+    with pytest.raises(RuntimeError, match="AUTODEFENSE_SCANNER_HMAC_KEY"):
+        create_app()
+
+
 async def test_no_api_key_configured_allows_all(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "local")
     monkeypatch.setattr(settings, "api_key", None)
     monkeypatch.setattr(settings, "scanner_hmac_key", None)
     monkeypatch.setattr(settings, "data_encryption_enabled", False)

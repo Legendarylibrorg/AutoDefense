@@ -12,4 +12,3 @@ api_router.include_router(metrics.router, tags=["metrics"])
 api_router.include_router(config.router, tags=["config"])
 api_router.include_router(scan.router, tags=["scan"])
 api_router.include_router(kernel.router, tags=["kernel"])
-

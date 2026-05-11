@@ -1,4 +1,4 @@
- export type EventItem = {
+export type EventItem = {
    ts: string;
    type: string;
    trace_id: string;
@@ -107,24 +107,55 @@ type SealedEnvelope = {
   hmac: string;
 };
 
-// Vite injects import.meta.env at build time; every VITE_* value ships in the browser bundle.
-// Do not treat API keys or transport secrets as confidential — use a gateway or short-lived tokens in production.
+/** Session keys take precedence over Vite env so secrets are not required in the built bundle. */
+export const SESSION_KEYS = {
+  apiKey: "autodefense_api_key",
+  transportKeyB64: "autodefense_transport_key_b64",
+} as const;
+
 const httpBase = import.meta.env.VITE_BACKEND_HTTP ?? "http://localhost:8000";
 const wsBase = import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000";
-const transportKeyB64 = import.meta.env.VITE_TRANSPORT_KEY_B64 as string | undefined;
-const transportSealEnabled =
-  (import.meta.env.VITE_TRANSPORT_SEAL_ENABLED ?? "false") === "true" && !!transportKeyB64;
-const apiKey = import.meta.env.VITE_API_KEY as string | undefined;
+
+export function getResolvedApiKey(): string | undefined {
+  try {
+    const s = sessionStorage.getItem(SESSION_KEYS.apiKey)?.trim();
+    if (s) return s;
+  } catch {
+    /* ignore */
+  }
+  const fromEnv = (import.meta.env.VITE_API_KEY as string | undefined)?.trim();
+  return fromEnv || undefined;
+}
+
+export function getResolvedTransportKeyB64(): string | undefined {
+  try {
+    const s = sessionStorage.getItem(SESSION_KEYS.transportKeyB64)?.trim();
+    if (s) return s;
+  } catch {
+    /* ignore */
+  }
+  const fromEnv = (import.meta.env.VITE_TRANSPORT_KEY_B64 as string | undefined)?.trim();
+  return fromEnv || undefined;
+}
+
+function transportSealEnabled(): boolean {
+  return (
+    (import.meta.env.VITE_TRANSPORT_SEAL_ENABLED ?? "false") === "true" &&
+    !!getResolvedTransportKeyB64()
+  );
+}
 
 function authHeaders(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (apiKey) h["Authorization"] = `Bearer ${apiKey}`;
+  const key = getResolvedApiKey();
+  if (key) h["Authorization"] = `Bearer ${key}`;
   return h;
 }
 
 function authGet(): RequestInit | undefined {
-  if (!apiKey) return undefined;
-  return { headers: { Authorization: `Bearer ${apiKey}` } };
+  const key = getResolvedApiKey();
+  if (!key) return undefined;
+  return { headers: { Authorization: `Bearer ${key}` } };
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
@@ -154,9 +185,10 @@ function bytesFromB64(s: string): Uint8Array {
 }
 
 async function importHkdfBaseKey(): Promise<CryptoKey> {
-  if (!transportKeyB64) throw new Error("Missing VITE_TRANSPORT_KEY_B64");
+  const transportKeyB64 = getResolvedTransportKeyB64();
+  if (!transportKeyB64) throw new Error("Transport key missing (set in browser session or VITE_TRANSPORT_KEY_B64)");
   const raw = bytesFromB64(transportKeyB64);
-  if (raw.byteLength !== 32) throw new Error("VITE_TRANSPORT_KEY_B64 must decode to 32 bytes");
+  if (raw.byteLength !== 32) throw new Error("Transport key must decode to 32 bytes");
   return crypto.subtle.importKey("raw", toArrayBuffer(raw), "HKDF", false, ["deriveKey"]);
 }
 
@@ -221,12 +253,17 @@ async function sealJson(obj: unknown, aad: string): Promise<SealedEnvelope> {
     hmac: mac,
   };
 }
- 
- export const API = {
-   httpBase,
-   wsUrl: `${wsBase.replace(/\/$/, "")}/events/ws`,
-   wsProtocols: apiKey ? ["auth." + apiKey] : undefined as string[] | undefined,
-   async fetchHealth(): Promise<HealthInfo> {
+
+export const API = {
+  httpBase,
+  get wsUrl() {
+    return `${wsBase.replace(/\/$/, "")}/events/ws`;
+  },
+  get wsProtocols(): string[] | undefined {
+    const k = getResolvedApiKey();
+    return k ? [`auth.${k}`] : undefined;
+  },
+  async fetchHealth(): Promise<HealthInfo> {
      const res = await fetch(`${httpBase.replace(/\/$/, "")}/health`);
      if (!res.ok) throw new Error(`GET /health failed: ${res.status}`);
      return (await res.json()) as HealthInfo;
@@ -261,8 +298,9 @@ async function sealJson(obj: unknown, aad: string): Promise<SealedEnvelope> {
     return (await res.json()) as RuntimeConfig;
   },
   async scanArtifacts(artifacts: Artifact[]): Promise<ScanResponse> {
-    const url = `${httpBase.replace(/\/$/, "")}${transportSealEnabled ? "/scan/sealed" : "/scan"}`;
-    const body = transportSealEnabled ? { sealed: await sealJson({ artifacts }, "scan") } : { artifacts };
+    const sealed = transportSealEnabled();
+    const url = `${httpBase.replace(/\/$/, "")}${sealed ? "/scan/sealed" : "/scan"}`;
+    const body = sealed ? { sealed: await sealJson({ artifacts }, "scan") } : { artifacts };
     const res = await fetch(url, {
       method: "POST",
       headers: authHeaders(),
@@ -281,8 +319,9 @@ async function sealJson(obj: unknown, aad: string): Promise<SealedEnvelope> {
     model_output?: string;
     tool_calls?: Array<Record<string, unknown>>;
   }): Promise<AnalyzeResponse> {
-    const url = `${httpBase.replace(/\/$/, "")}${transportSealEnabled ? "/analyze/sealed" : "/analyze"}`;
-    const body = transportSealEnabled ? { sealed: await sealJson(req, "analyze") } : req;
+    const sealed = transportSealEnabled();
+    const url = `${httpBase.replace(/\/$/, "")}${sealed ? "/analyze/sealed" : "/analyze"}`;
+    const body = sealed ? { sealed: await sealJson(req, "analyze") } : req;
     const res = await fetch(url, {
       method: "POST",
       headers: authHeaders(),

@@ -30,6 +30,10 @@ def _derive_subkey(master: bytes, info: bytes) -> bytes:
     return HKDF(algorithm=SHA256(), length=32, salt=None, info=info).derive(master)
 
 
+# `alg` values that indicate a Redis-stored payload should pass through decrypt_json.
+STORE_ENVELOPE_ALGS = frozenset({"AES-256-GCM", "AES-256-GCM-DOUBLE", "none"})
+
+
 class CryptoManager:
     """
     Double-layer AES-256-GCM encryption with HMAC-SHA256 integrity binding.
@@ -77,7 +81,9 @@ class CryptoManager:
     # ------------------------------------------------------------------
 
     def encrypt_json(self, obj: dict[str, Any], *, aad: bytes = b"") -> dict[str, Any]:
-        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode(
+            "utf-8"
+        )
         digest = sha256_hex(raw)
 
         if not self.enabled:
@@ -161,7 +167,11 @@ class CryptoManager:
         if sha256_hex(raw) != expected_sha:
             return {}
 
-        obj = json.loads(raw.decode("utf-8"))
+        try:
+            text = raw.decode("utf-8")
+            obj = json.loads(text)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {}
         return obj if isinstance(obj, dict) else {}
 
     def _decrypt_v1(self, payload: dict[str, Any], *, aad: bytes) -> dict[str, Any]:
@@ -179,8 +189,12 @@ class CryptoManager:
             return {}
 
         expected = str(payload.get("sha256", ""))
-        if expected and sha256_hex(raw) != expected:
+        if not expected or sha256_hex(raw) != expected:
             return {}
 
-        obj = json.loads(raw.decode("utf-8"))
+        try:
+            text = raw.decode("utf-8")
+            obj = json.loads(text)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return {}
         return obj if isinstance(obj, dict) else {}

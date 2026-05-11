@@ -19,16 +19,39 @@ from app.core.models import AgentSignal, Artifact, ArtifactKind, ThreatType
 # ---------------------------------------------------------------------------
 
 SUSPICIOUS_EXTENSIONS = {
-    ".exe", ".dll", ".msi", ".scr", ".com", ".pif",
-    ".js", ".jse", ".vbs", ".vbe", ".wsf", ".wsh",
-    ".ps1", ".psm1", ".psd1",
-    ".bat", ".cmd",
-    ".jar", ".class",
-    ".iso", ".img", ".dmg",
-    ".hta", ".cpl", ".inf", ".reg",
-    ".lnk", ".url",
-    ".appx", ".msix",
-    ".elf", ".so", ".dylib",
+    ".exe",
+    ".dll",
+    ".msi",
+    ".scr",
+    ".com",
+    ".pif",
+    ".js",
+    ".jse",
+    ".vbs",
+    ".vbe",
+    ".wsf",
+    ".wsh",
+    ".ps1",
+    ".psm1",
+    ".psd1",
+    ".bat",
+    ".cmd",
+    ".jar",
+    ".class",
+    ".iso",
+    ".img",
+    ".dmg",
+    ".hta",
+    ".cpl",
+    ".inf",
+    ".reg",
+    ".lnk",
+    ".url",
+    ".appx",
+    ".msix",
+    ".elf",
+    ".so",
+    ".dylib",
 }
 
 # ---------------------------------------------------------------------------
@@ -86,13 +109,13 @@ SSRF_PATTERNS: list[str] = [
     r"^https?://10\.",
     r"^https?://172\.(1[6-9]|2[0-9]|3[01])\.",
     r"^https?://192\.168\.",
-    r"^https?://169\.254\.",            # AWS metadata
-    r"^https?://\[::1\]",              # IPv6 loopback
-    r"^https?://\[fc",                  # IPv6 ULA
-    r"^https?://\[fd",                  # IPv6 ULA
-    r"^https?://metadata\.google",      # GCP metadata
-    r"^https?://169\.254\.169\.254",    # Cloud metadata endpoint
-    r"^https?://100\.100\.100\.200",    # Alibaba metadata
+    r"^https?://169\.254\.",  # AWS metadata
+    r"^https?://\[::1\]",  # IPv6 loopback
+    r"^https?://\[fc",  # IPv6 ULA
+    r"^https?://\[fd",  # IPv6 ULA
+    r"^https?://metadata\.google",  # GCP metadata
+    r"^https?://169\.254\.169\.254",  # Cloud metadata endpoint
+    r"^https?://100\.100\.100\.200",  # Alibaba metadata
     r"^file://",
     r"^gopher://",
     r"^dict://",
@@ -240,7 +263,9 @@ async def _check_ssrf_async(url: str) -> list[str]:
                     timeout=2.0,
                 )
                 if is_private:
-                    reasons.append(f"SSRF risk: hostname '{host}' resolves to a private/loopback address")
+                    reasons.append(
+                        f"SSRF risk: hostname '{host}' resolves to a private/loopback address"
+                    )
     except (asyncio.TimeoutError, Exception):
         pass
     return reasons
@@ -289,7 +314,9 @@ class ArtifactAgent:
                             threat_type=ThreatType.tool_abuse,
                             score=85,
                             confidence=0.9,
-                            reasons=[f"Artifact too large (hard cap {MAX_FILE_SIZE // 1_000_000}MB)"],
+                            reasons=[
+                                f"Artifact too large (hard cap {MAX_FILE_SIZE // 1_000_000}MB)"
+                            ],
                             evidence={"name": a.name, "size_bytes": len(data)},
                         )
                     )
@@ -399,9 +426,11 @@ class ArtifactAgent:
                     try:
                         raw = base64.b64decode(a.content_base64, validate=True)
                         msg = BytesParser(policy=email_default).parsebytes(raw)
-                        txt = (msg.get("subject", "") or "") + "\n" + (
-                            msg.get_body(preferencelist=("plain",)) or ""
-                        ).get_content()
+                        txt = (
+                            (msg.get("subject", "") or "")
+                            + "\n"
+                            + (msg.get_body(preferencelist=("plain",)) or "").get_content()
+                        )
                     except Exception:
                         txt = ""
 

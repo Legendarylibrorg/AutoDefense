@@ -18,4 +18,3 @@ async def get_alerts(redis=Depends(get_redis)) -> list[dict]:
         if e.type in ("decision.block_isolate", "decision.sanitize", "incident.detected")
     ]
     return critical[-200:]
-

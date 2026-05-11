@@ -18,7 +18,9 @@ class ForensicsAgent:
     def __init__(self, redis: Redis):
         self.redis = redis
         self.bus = EventBus(redis)
-        self.crypto = CryptoManager(settings.data_key_b64 if settings.data_encryption_enabled else None)
+        self.crypto = CryptoManager(
+            settings.data_key_b64 if settings.data_encryption_enabled else None
+        )
 
     async def record(
         self,
@@ -45,7 +47,9 @@ class ForensicsAgent:
                 type="forensics.recorded",
                 trace_id=req.trace_id,
                 session_id=req.session_id,
-                payload={"risk_score": decision.get("risk_score"), "action": decision.get("action")},
+                payload={
+                    "risk_score": decision.get("risk_score"),
+                    "action": decision.get("action"),
+                },
             )
         )
- 

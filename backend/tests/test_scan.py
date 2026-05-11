@@ -51,9 +51,10 @@ async def test_scan_blocks_invalid_image_magic(client):
 
 
 async def test_scan_warns_non_http_url(client):
-    res = await client.post("/scan", json={"artifacts": [{"kind": "url", "content_text": "file:///etc/passwd"}]})
+    res = await client.post(
+        "/scan", json={"artifacts": [{"kind": "url", "content_text": "file:///etc/passwd"}]}
+    )
     assert res.status_code == 200
     body = res.json()
     assert body["risk_score"] >= 1
     assert any(s["threat_type"] == "anomaly" for s in body["signals"])
-

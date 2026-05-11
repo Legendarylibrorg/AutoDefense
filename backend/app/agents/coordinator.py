@@ -25,7 +25,7 @@ class CoordinatorAgent:
         threat_counts = Counter(threat_types)
 
         top_reasons: list[str] = []
-        for s in sorted(signals, key=lambda x: (x.score * x.confidence), reverse=True)[:4]:
+        for s in sorted(signals, key=lambda x: x.score * x.confidence, reverse=True)[:4]:
             top_reasons.extend([f"{s.agent}: {r}" for r in s.reasons[:3]])
 
         t = thresholds or {}
@@ -58,4 +58,3 @@ class CoordinatorAgent:
             "sanitized_output": sanitized_output,
             "explain": explain_out,
         }
- 

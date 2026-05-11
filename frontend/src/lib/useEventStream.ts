@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API, type EventItem } from "./api";
 
 export function useEventStream(maxItems: number = 500) {
@@ -6,12 +6,6 @@ export function useEventStream(maxItems: number = 500) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const retriesRef = useRef(0);
-
-  const byType = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const e of events) m.set(e.type, (m.get(e.type) ?? 0) + 1);
-    return m;
-  }, [events]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,5 +59,5 @@ export function useEventStream(maxItems: number = 500) {
     };
   }, [maxItems]);
 
-  return { events, connected, byType };
+  return { events, connected };
 }

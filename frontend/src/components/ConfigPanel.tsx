@@ -1,7 +1,7 @@
- import React, { useEffect, useMemo, useState } from "react";
- import { API, type RuntimeConfig } from "../lib/api";
- 
- function clampInt(v: number, lo: number, hi: number) {
+import { useEffect, useMemo, useRef, useState } from "react";
+import { API, type RuntimeConfig } from "../lib/api";
+
+function clampInt(v: number, lo: number, hi: number) {
    return Math.max(lo, Math.min(hi, Math.round(v)));
  }
  
@@ -24,6 +24,7 @@
  }
  
  export function ConfigPanel(props: { onConfig?: (cfg: RuntimeConfig) => void }) {
+  const onConfigRef = useRef(props.onConfig);
    const [loading, setLoading] = useState(true);
    const [cfg, setCfg] = useState<RuntimeConfig | null>(null);
    const [draft, setDraft] = useState<RuntimeConfig | null>(null);
@@ -33,6 +34,10 @@
    const errs = useMemo(() => (draft ? validate(draft) : []), [draft]);
    const dirty = useMemo(() => JSON.stringify(cfg) !== JSON.stringify(draft), [cfg, draft]);
  
+  useEffect(() => {
+    onConfigRef.current = props.onConfig;
+  }, [props.onConfig]);
+
    useEffect(() => {
      let cancelled = false;
      (async () => {
@@ -41,7 +46,7 @@
          if (cancelled) return;
          setCfg(c);
          setDraft(c);
-         props.onConfig?.(c);
+        onConfigRef.current?.(c);
        } catch (e: any) {
          setErr(String(e?.message ?? e));
        } finally {
@@ -61,7 +66,7 @@
        const saved = await API.putConfig(draft);
        setCfg(saved);
        setDraft(saved);
-       props.onConfig?.(saved);
+      onConfigRef.current?.(saved);
      } catch (e: any) {
        setErr(String(e?.message ?? e));
      } finally {

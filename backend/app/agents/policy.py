@@ -1,24 +1,14 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from typing import Any
 
 from app.core.models import AgentSignal, AnalyzeRequest, ThreatType
-
-
-def _normalize(text: str) -> str:
-    out = unicodedata.normalize("NFKC", text)
-    out = re.sub(r"[\u200b\u200c\u200d\u200e\u200f\ufeff\u00ad]", "", out)
-    out = re.sub(r"\s+", " ", out)
-    return out
+from app.core.text import normalize_for_matching
 
 
 class PolicyAgent:
     name = "policy"
-
-    def __init__(self):
-        pass
 
     async def analyze(
         self,
@@ -30,7 +20,7 @@ class PolicyAgent:
         signals: list[AgentSignal] = []
 
         text = sentinel_sanitized_input
-        check_text = _normalize(text)
+        check_text = normalize_for_matching(text)
         blocked: list[str] = []
         for rx in runtime_policy.get("blocked_input_regexes", []):
             if re.search(rx, check_text, flags=re.IGNORECASE):
@@ -48,7 +38,7 @@ class PolicyAgent:
                 )
             )
 
-        sanitized = _normalize(text)
+        sanitized = normalize_for_matching(text)
         for rx in runtime_policy.get("sanitize_input_regexes", []):
             sanitized = re.sub(rx, "[[POLICY_REDACTED]]", sanitized, flags=re.IGNORECASE)
 

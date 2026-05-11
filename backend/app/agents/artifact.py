@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import ipaddress
 import re
 import socket
@@ -12,6 +11,7 @@ from email.policy import default as email_default
 from typing import Any
 from urllib.parse import urlparse
 
+from app.core.crypto import sha256_hex
 from app.core.models import AgentSignal, Artifact, ArtifactKind, ThreatType
 
 # ---------------------------------------------------------------------------
@@ -136,10 +136,6 @@ POLYGLOT_MAGIC_COMBOS: list[tuple[bytes, bytes, str]] = [
 ]
 
 MAX_FILE_SIZE = 8_000_000  # 8 MB hard cap
-
-
-def _sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
 
 
 def _looks_like_image(data: bytes) -> str | None:
@@ -302,7 +298,7 @@ class ArtifactAgent:
                     )
                     continue
 
-                item["sha256"] = _sha256(data)
+                item["sha256"] = sha256_hex(data)
                 item["size_bytes"] = len(data)
 
                 # Size cap (prevents zip bombs / huge payloads)

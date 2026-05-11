@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { API, type EventItem, type HealthInfo } from "../lib/api";
 import { useEventStream } from "../lib/useEventStream";
 import { AnalyzePanel } from "../components/AnalyzePanel";
@@ -9,6 +9,7 @@ import { KernelHealth } from "../components/KernelHealth";
 import { RiskChart } from "../components/RiskChart";
 import { StatCard } from "../components/StatCard";
 import { ConnectionCredentials } from "../components/ConnectionCredentials";
+import { osLabel } from "../lib/platform";
 
 function classifyAction(type: string): "allow" | "log_monitor" | "sanitize" | "block_isolate" | "unknown" {
   if (!type.startsWith("decision.")) return "unknown";
@@ -82,10 +83,7 @@ export function App() {
               {health?.platform ? (
                 <span>
                   {" · "}
-                  {health.platform.os === "linux" ? "Linux" :
-                   health.platform.os === "darwin" ? "macOS" :
-                   health.platform.os === "windows" ? "Windows" :
-                   health.platform.os}
+                  {osLabel(health.platform.os)}
                   {" "}{health.platform.arch}
                   {health.platform.in_container ? " (container)" : ""}
                 </span>

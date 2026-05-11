@@ -12,7 +12,6 @@ All backend variables use the `AUTODEFENSE_` prefix and are read by Pydantic Set
 | `AUTODEFENSE_ENVIRONMENT` | string | `local` | Environment identifier |
 | `AUTODEFENSE_REDIS_URL` | string | `redis://redis:6379/0` | Redis connection URL |
 | `AUTODEFENSE_REDIS_STREAM_KEY` | string | `autodefense:events` | Redis stream key for events |
-| `AUTODEFENSE_REDIS_CONSUMER_GROUP` | string | `dashboard` | Redis consumer group name |
 
 ### Risk thresholds
 

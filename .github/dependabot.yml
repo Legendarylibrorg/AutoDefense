@@ -6,12 +6,31 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      backend-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      react-ecosystem:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
+      vite-ecosystem:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+      styling:
+        patterns:
+          - "tailwindcss"
+          - "postcss"
+          - "autoprefixer"
 
   - package-ecosystem: "github-actions"
     directory: "/"

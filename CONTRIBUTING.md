@@ -2,6 +2,8 @@
 
 Thank you for helping improve AutoDefense. This document describes how to work on the project locally and what we expect in pull requests.
 
+**First-time setup from a git clone** (Docker, `.env`, optional local backend/frontend): [docs/setup.md](docs/setup.md).
+
 ## Code of conduct
 
 Contributors are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).

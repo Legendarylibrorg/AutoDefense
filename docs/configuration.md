@@ -39,14 +39,14 @@ Outside `AUTODEFENSE_ENVIRONMENT=local`, the API key is **required** at startup.
 
 ### Encryption
 
-All encryption uses double-layer AES-256-GCM with HKDF-derived subkeys. See [Security](security.md) for the full protocol.
+At-rest and sealed transport each use **one** base64-encoded **32-byte master** in settings. From that master, **`CryptoManager` derives exactly three HKDF-SHA256 subkeys** (inner AES-256-GCM, outer AES-256-GCM, HMAC-SHA256) with fixed `info` labels — see [Security → Encryption → HKDF parameters](security.md#hkdf-parameters-backend-and-browser).
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `AUTODEFENSE_DATA_ENCRYPTION_ENABLED` | bool | `true` | Encrypt data stored in Redis (double-layer AES-256-GCM) |
-| `AUTODEFENSE_DATA_KEY_B64` | string | `null` | Base64-encoded 32-byte master key; three subkeys derived via HKDF. In `local` only, if empty while encryption is on, an ephemeral key is generated at startup |
-| `AUTODEFENSE_TRANSPORT_SEAL_ENABLED` | bool | `true` | Require double-layer encrypted request payloads on `/*/sealed` endpoints |
-| `AUTODEFENSE_TRANSPORT_KEY_B64` | string | `""` | Base64-encoded 32-byte master key for transport (shared with frontend via `VITE_TRANSPORT_KEY_B64`) |
+| `AUTODEFENSE_DATA_ENCRYPTION_ENABLED` | bool | `true` | Encrypt data stored in Redis (v2 double AES-GCM + HMAC + SHA-256) |
+| `AUTODEFENSE_DATA_KEY_B64` | string | `null` | Master for at-rest encryption; **three** HKDF subkeys derived. In `local` only, if empty while encryption is on, an ephemeral key is generated at startup |
+| `AUTODEFENSE_TRANSPORT_SEAL_ENABLED` | bool | `true` | When true and a transport key is set, sealed endpoints decrypt client envelopes |
+| `AUTODEFENSE_TRANSPORT_KEY_B64` | string | `""` | Master for sealed HTTP bodies — **same three-subkey derivation**; must match `VITE_TRANSPORT_KEY_B64` for the bundled dashboard |
 
 ### Connection limits
 

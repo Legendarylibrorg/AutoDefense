@@ -39,7 +39,9 @@ class CryptoManager:
     Double-layer AES-256-GCM encryption with HMAC-SHA256 integrity binding.
 
     From a single 32-byte master key, three independent subkeys are derived
-    via HKDF-SHA256:
+    via HKDF-SHA256 (RFC 5869; ``salt=None`` in ``cryptography`` resolves to a
+    digest-sized zero salt for the extract step, aligned with the dashboard’s
+    Web Crypto HKDF using 32 zero bytes):
 
         key_inner  = HKDF(master, info="autodefense-inner-v2")   → inner AES-256-GCM
         key_outer  = HKDF(master, info="autodefense-outer-v2")   → outer AES-256-GCM

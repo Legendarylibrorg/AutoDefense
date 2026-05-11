@@ -81,10 +81,9 @@ Same as `/analyze` but with a double-layer AES-256-GCM encrypted payload. Requir
 }
 ```
 
-The three subkeys (inner AES, outer AES, HMAC) are derived from the master transport key via HKDF-SHA256 with distinct `info` parameters. See [Security](security.md) for details.
+The **three** subkeys (inner AES, outer AES, HMAC) are derived from the master transport key with **three** HKDF-SHA256 calls (distinct `info` strings; **no fourth** HKDF output). Backend and bundled dashboard use aligned HKDF salt handling — see [Security → HKDF parameters](security.md#hkdf-parameters-backend-and-browser).
 
 Legacy v1 single-layer envelopes (`alg: "AES-256-GCM"`) are still accepted for backward compatibility.
-```
 
 ### POST /scan
 
@@ -109,7 +108,7 @@ Artifact-only preflight scan (no full pipeline).
 
 ### POST /scan/sealed
 
-Double-layer encrypted version of `/scan`. Same v2 envelope format as `/analyze/sealed`.
+Double-layer encrypted version of `/scan`. Same v2 envelope format as `/analyze/sealed` — **three** HKDF-derived subkeys from the transport master; see [Security](security.md#hkdf-parameters-backend-and-browser).
 
 ### POST /scan/kernel
 

@@ -17,9 +17,11 @@ RUN npm run build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+ENV CSP_CONNECT_HTTP=http://localhost:8000 \
+    CSP_CONNECT_WS=ws://localhost:8000
 RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx && \
     touch /var/run/nginx.pid && chown nginx:nginx /var/run/nginx.pid
 USER nginx
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/bin/sh", "-c", "envsubst '${CSP_CONNECT_HTTP} ${CSP_CONNECT_WS}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]

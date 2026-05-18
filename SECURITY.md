@@ -34,3 +34,13 @@ Out of scope: vulnerabilities only present in outdated dependencies **after** fi
 ## More detail
 
 For threat model, crypto design, and OWASP coverage notes, see [docs/security.md](docs/security.md).
+
+## Supply-chain and malware hygiene
+
+This repository ships **application code**, not antivirus signatures. Routine checks maintainers expect before releases:
+
+- **Frontend:** Run `npm audit` after `npm install` / dependency bumps; Prefer `npm ci` with a committed lockfile in CI builds.
+- **Backend:** Prefer `uv lock` / reproducible installs; review `uv.lock` diffs like any other dependency change.
+- **Heuristic review:** Scripts under `scripts/`, scanners under `kernel/`, `macos/`, `windows/`, and the optional `demo` Compose profile deserve the same scrutiny as production code (`subprocess`, `urllib`, host mounts).
+
+For authoritative malware verdicts on third-party packages, rely on OS-level scanners, Sigstore attestations where available, and your organization's software supply-chain policy — not grep alone.

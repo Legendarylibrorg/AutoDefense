@@ -16,7 +16,7 @@ This creates or updates the ruleset **`AutoDefense: protect main`** with:
 - **Pull request required** before merging to `main` (no direct pushes)
 - **Required status checks** (strict): `Python 3.11`, `Python 3.12`, `Node 20`, and `Node 22` — these are the **job `name:`** values from `.github/workflows/backend-ci.yml` and `frontend-ci.yml` (what GitHub lists as the check name), not `Workflow title / job`.
 
-**Optional (recommended after one green run):** add supply-chain jobs from `.github/workflows/supply-chain.yml` — `npm audit`, `OSV lockfile scan`, and on PRs `Dependency review (PR)` — via `CONTEXTS_JSON` when running `configure-github-ruleset-main.sh`.
+**Optional (recommended after one green run):** add supply-chain jobs from `.github/workflows/supply-chain.yml` — `npm audit`, `OSV lockfile scan` (push/schedule) or `OSV lockfile scan (PR)` (pull requests), and `Dependency review (PR)` — via `CONTEXTS_JSON` when running `configure-github-ruleset-main.sh`.
 
 ### Environment overrides
 

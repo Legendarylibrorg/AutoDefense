@@ -1,5 +1,5 @@
 # Dependency updates (requires Dependabot + security updates enabled on GitHub).
-# CI: .github/workflows/supply-chain.yml (npm audit, pip-audit, PR dependency review).
+# CI: .github/workflows/supply-chain.yml (npm audit, OSV lockfile scan, PR dependency review).
 version: 2
 updates:
   - package-ecosystem: "pip"

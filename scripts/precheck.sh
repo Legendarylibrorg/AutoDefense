@@ -17,7 +17,7 @@ uv run pytest tests/ -q --tb=short
 echo "==> Frontend (npm ci + audit + build)"
 export PATH="/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:$PATH"
 cd "$ROOT/frontend"
-npm ci
+npm ci --ignore-scripts
 npm audit --audit-level=moderate
 npm run build
 

@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Supply chain CI:** Pin `google/osv-scanner-action` to `v2.3.8` (reusable PR/full lockfile workflows); upgrade `dependency-review-action` to v5; use `npm ci --ignore-scripts` in audit/install paths.
 - **Docs:** Align stack versions (React 19, Vite 8), clarify Compose Redis is internal-only, and document frontend dev API URLs / Vite proxy behavior.
 - **Backend:** Skip broken WebSocket auth in HTTP middleware (routes close with 1008); key `/health` platform cache by environment; pin Docker image deps via `uv.lock`.
 - **Frontend:** Vite dev proxy for API paths; use same-origin URLs in dev when `VITE_BACKEND_*` are unset.

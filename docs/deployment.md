@@ -6,7 +6,7 @@ Step-by-step from clone (including `.env` and encryption keys): **[Setup from Gi
 
 - **Docker** (Docker Desktop or Docker Engine with Compose V2)
 - **Python 3.11+** (for local development or running host scanners)
-- **Node.js 18+** (for frontend local development only)
+- **Node.js 20+** (for frontend local development only)
 
 ## Docker install (recommended)
 
@@ -27,9 +27,9 @@ The start script:
 
 ### What gets deployed
 
-| Service | Port | Health check |
-|---------|------|-------------|
-| Redis 7 | 6379 | `redis-cli PING` |
+| Service | Host port | Health check |
+|---------|-----------|-------------|
+| Redis 7 | *(internal only — not published)* | `redis-cli PING` inside the compose network |
 | Backend (FastAPI + uvicorn) | 8000 | `GET /health` |
 | Frontend (React + nginx) | 3000 | `wget --spider http://localhost:80/` |
 
@@ -89,7 +89,7 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:3000`. Vite proxies API calls to `http://localhost:8000` by default.
+Opens at `http://localhost:3000`. Set `VITE_BACKEND_HTTP` and `VITE_BACKEND_WS` in `frontend/.env` (see `frontend/.env.example`) so the dashboard calls your backend — typically `http://localhost:8000` and `ws://localhost:8000` when the API runs locally. Vite can proxy those paths in dev; production builds bake the URLs at image build time.
 
 ### Run tests
 

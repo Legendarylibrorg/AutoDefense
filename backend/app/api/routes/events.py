@@ -6,7 +6,7 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.core.event_bus import EventBus
 from app.core.redis_client import get_redis
@@ -18,7 +18,6 @@ logger = logging.getLogger("autodefense.events")
 
 _active_ws: set[WebSocket] = set()
 _active_sse: int = 0
-_MAX_STREAMING = settings.max_ws_connections
 
 
 @router.get("/events")
@@ -31,11 +30,10 @@ async def get_events(redis=Depends(get_redis)) -> list[dict]:
 @router.get("/events/stream")
 async def stream_events(redis=Depends(get_redis)):
     global _active_sse
-    if _active_sse >= _MAX_STREAMING:
-        return StreamingResponse(
-            iter(['data: {"error": "connection limit reached"}\n\n']),
-            media_type="text/event-stream",
+    if _active_sse >= settings.max_ws_connections:
+        return JSONResponse(
             status_code=503,
+            content={"detail": "SSE connection limit reached"},
         )
 
     bus = EventBus(redis)
@@ -59,7 +57,7 @@ async def stream_events(redis=Depends(get_redis)):
 
 @router.websocket("/events/ws")
 async def events_ws(ws: WebSocket, redis=Depends(get_redis)):
-    if len(_active_ws) >= _MAX_STREAMING:
+    if len(_active_ws) >= settings.max_ws_connections:
         await ws.close(code=1013, reason="Connection limit reached")
         return
 

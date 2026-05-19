@@ -101,7 +101,7 @@ AUTO DEFENSE/
 │   │   ├── policies/        # Default blocked/sanitize regexes
 │   │   └── services/        # Defense pipeline orchestration
 │   └── tests/               # pytest suite
-├── frontend/                # React 18 + Tailwind + Vite dashboard
+├── frontend/                # React 19 + Tailwind + Vite dashboard
 │   └── src/
 │       ├── components/      # StatCard, RiskChart, EventFeed, ConfigPanel, KernelHealth, ...
 │       ├── lib/             # API client, WebSocket hook

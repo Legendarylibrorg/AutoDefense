@@ -2,7 +2,8 @@
 # Precheck, push branch, and open a PR against main (requires: gh auth login).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BRANCH="${1:-chore/security-hardening-and-deps}"
+BRANCH="${1:-$(git -C "$ROOT" branch --show-current)}"
+BASE="${PR_BASE:-main}"
 
 cd "$ROOT"
 "$ROOT/scripts/precheck.sh"
@@ -14,24 +15,10 @@ fi
 
 git push -u origin "$BRANCH"
 
-gh pr create --base main --head "$BRANCH" --title "security: tighten API surface and supply chain; refresh Vite stack" --body "$(cat <<'EOF'
-## Summary
-
-Hardens the API and deployment surface for non-local environments and refreshes the frontend toolchain.
-
-- Lock down OpenAPI outside `local`, redact `/health` in production-like envs, authenticate WebSockets, and add security headers
-- Docker read-only defaults and CSP templating for the dashboard nginx image
-- Vite/Rolldown lockfile bump, backend crypto floor, Dependabot grouping, simulation script formatting
-
-## Checklist
-
-- [x] Backend: `ruff check`, `ruff format --check`, and `pytest` pass locally
-- [x] Frontend: `npm run build` passes
-- [x] `CHANGELOG.md` updated under **Unreleased**
-- [x] Docs updated where behavior or deployment assumptions changed (`SECURITY.md`, `.env.example`, `docker-compose.yml`)
-
-## Notes for reviewers
-
-Precheck script: `./scripts/precheck.sh`
-EOF
-)"
+if [[ -n "${PR_TITLE:-}" && -n "${PR_BODY_FILE:-}" ]]; then
+  gh pr create --base "$BASE" --head "$BRANCH" --title "$PR_TITLE" --body-file "$PR_BODY_FILE"
+elif [[ -n "${PR_TITLE:-}" ]]; then
+  gh pr create --base "$BASE" --head "$BRANCH" --title "$PR_TITLE" --fill
+else
+  gh pr create --base "$BASE" --head "$BRANCH" --fill
+fi

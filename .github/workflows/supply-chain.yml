@@ -3,6 +3,8 @@ name: Supply chain
 
 on:
   pull_request:
+  merge_group:
+    branches: [main]
   push:
     branches: [main]
   schedule:
@@ -30,6 +32,7 @@ jobs:
       - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: moderate
+          comment-summary-in-pr: always
 
   npm-audit:
     name: npm audit
@@ -47,21 +50,34 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install from lockfile
-        run: npm ci
+      - name: Install from lockfile (no lifecycle scripts)
+        run: npm ci --ignore-scripts
 
       - name: Audit (moderate+)
         run: npm audit --audit-level=moderate
 
-  osv-lockfiles:
-    name: OSV lockfile scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+  osv-scan-pr:
+    name: OSV lockfile scan (PR)
+    if: github.event_name == 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.3.8
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    with:
+      scan-args: |-
+        --lockfile=backend/uv.lock
+        --lockfile=frontend/package-lock.json
 
-      - name: Scan uv.lock and package-lock.json
-        uses: google/osv-scanner-action@v2
-        with:
-          scan-args: |-
-            --lockfile=backend/uv.lock
-            --lockfile=frontend/package-lock.json
+  osv-scan-full:
+    name: OSV lockfile scan
+    if: github.event_name != 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    with:
+      scan-args: |-
+        --lockfile=backend/uv.lock
+        --lockfile=frontend/package-lock.json

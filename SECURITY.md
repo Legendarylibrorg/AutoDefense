@@ -41,7 +41,7 @@ This repository ships **application code**, not antivirus signatures. Routine ch
 
 - **Frontend:** `npm ci` with the committed `package-lock.json`; `npm audit --audit-level=moderate` (also `npm run audit` and CI in `.github/workflows/frontend-ci.yml` + `supply-chain.yml`). `frontend/.npmrc` sets `audit-level=moderate` and `engine-strict=true`.
 - **Backend:** `uv sync --all-extras --frozen` from `backend/uv.lock` (Docker and CI use the same lockfile); after bumps run `uv lock` and review `uv.lock` diffs. CI runs [OSV-Scanner](https://google.github.io/osv-scanner/) on `uv.lock` and `package-lock.json`.
-- **Pull requests:** GitHub **dependency review** runs on PRs via `.github/workflows/supply-chain.yml` (fails on moderate+ severity advisories in changed dependencies).
+- **Pull requests:** GitHub **dependency review** (v5, moderate+) and **OSV PR delta scan** on lockfiles via `.github/workflows/supply-chain.yml`. Installs use `npm ci --ignore-scripts` where lifecycle scripts are not required.
 - **Heuristic review:** Scripts under `scripts/`, scanners under `kernel/`, `macos/`, `windows/`, and the optional `demo` Compose profile deserve the same scrutiny as production code (`subprocess`, `urllib`, host mounts).
 
 For authoritative malware verdicts on third-party packages, rely on OS-level scanners, Sigstore attestations where available, and your organization's software supply-chain policy — not grep alone.

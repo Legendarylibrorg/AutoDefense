@@ -39,6 +39,6 @@ jobs:
 
       - name: Install, audit, and build
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm audit --audit-level=moderate
           npm run build

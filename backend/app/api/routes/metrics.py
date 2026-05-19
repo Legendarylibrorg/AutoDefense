@@ -26,14 +26,15 @@ def _detect_container() -> bool:
     return False
 
 
-_platform_cache: dict | None = None
+_platform_cache: dict[tuple[str, bool], dict] = {}
 
 
 def _platform_info() -> dict:
-    global _platform_cache
-    if _platform_cache is not None:
-        return _platform_cache
     from app.settings import settings as _settings
+
+    cache_key = (_settings.environment.strip().lower(), _settings.is_local)
+    if cache_key in _platform_cache:
+        return _platform_cache[cache_key]
 
     plat = platform.system().lower()
     is_local = _settings.is_local
@@ -64,8 +65,8 @@ def _platform_info() -> dict:
     else:
         info["kernel_scanner_available"] = False
         info["scanner_hint"] = "No scanner available for this platform."
-    _platform_cache = info
-    return _platform_cache
+    _platform_cache[cache_key] = info
+    return info
 
 
 @router.get("/health")

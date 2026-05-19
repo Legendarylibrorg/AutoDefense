@@ -3,20 +3,22 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "==> Backend (ruff + pytest)"
+echo "==> Backend (uv lock + ruff + pytest)"
 cd "$ROOT/backend"
-python3 -m venv .venv 2>/dev/null || true
-# shellcheck disable=SC1091
-source .venv/bin/activate
-pip install -q -e ".[dev]"
-ruff check .
-ruff format --check .
-python -m pytest tests/ -q --tb=short
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is required (https://docs.astral.sh/uv/getting-started/installation/)" >&2
+  exit 1
+fi
+uv sync --all-extras --frozen
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest tests/ -q --tb=short
 
-echo "==> Frontend (npm ci + build)"
+echo "==> Frontend (npm ci + audit + build)"
 export PATH="/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:$PATH"
 cd "$ROOT/frontend"
 npm ci
+npm audit --audit-level=moderate
 npm run build
 
 echo "==> Precheck passed"

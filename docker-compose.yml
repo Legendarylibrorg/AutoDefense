@@ -1,6 +1,6 @@
 services:
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     command:
       - redis-server
       - --appendonly
@@ -20,6 +20,11 @@ services:
   backend:
     build:
       context: ./backend
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
     environment:
       - AUTODEFENSE_REDIS_URL=redis://:${AUTODEFENSE_REDIS_PASSWORD}@redis:6379/0
       - AUTODEFENSE_LOG_LEVEL=${AUTODEFENSE_LOG_LEVEL:-INFO}
@@ -61,6 +66,16 @@ services:
         VITE_TRANSPORT_SEAL_ENABLED: "${AUTODEFENSE_TRANSPORT_SEAL_ENABLED:-true}"
         VITE_TRANSPORT_KEY_B64: "${AUTODEFENSE_TRANSPORT_KEY_B64:-}"
         VITE_API_KEY: "${AUTODEFENSE_API_KEY:-}"
+    environment:
+      CSP_CONNECT_HTTP: ${AUTODEFENSE_PUBLIC_BACKEND_HTTP:-http://localhost:8000}
+      CSP_CONNECT_WS: ${AUTODEFENSE_PUBLIC_BACKEND_WS:-ws://localhost:8000}
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
     ports:
       - "3000:80"
     depends_on:

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **API:** Hide OpenAPI outside `local`; redact sensitive `/health` fields in non-local environments; require API key on WebSocket connections; add security headers on HTTP responses.
+- **Docker:** Read-only root filesystem defaults where applicable; dashboard nginx CSP via `nginx.conf.template` and envsubst for connect-src.
+- **Supply chain:** Dependabot grouping tweaks; backend minimum versions for cryptography and related deps; Vite/Rolldown bump in frontend lockfile; `scripts/sync_vite_lock.py` for lockfile hygiene.
+
 ### Fixed
 
 - **`scripts/start.sh` / `scripts/start.ps1`:** Use **`docker compose`** or fall back to **`docker-compose`**; run **`compose config -q`** before **`up`** so bad `.env` / Compose files fail fast; portable empty-value checks (`grep -E`); print API keys with **`cut -f2-`** so values containing `=` are not truncated. PowerShell writes UTF-8 `.env` with a trailing newline, uses a StrictMode-safe compose wrapper, and **`exit`s** with the same code as Compose.

@@ -107,6 +107,40 @@ def test_staging_requires_data_key_when_encryption_on(monkeypatch: pytest.Monkey
         create_app()
 
 
+async def test_openapi_not_exposed_outside_local(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "staging")
+    monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
+    app = create_app()
+    fake = FakeRedis()
+    app.dependency_overrides[get_redis] = lambda: fake
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {TEST_API_KEY}"},
+    ) as c:
+        assert (await c.get("/openapi.json")).status_code == 404
+        assert (await c.get("/docs")).status_code == 404
+
+
+async def test_health_minimal_outside_local(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "environment", "staging")
+    monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "data_encryption_enabled", False)
+    app = create_app()
+    fake = FakeRedis()
+    app.dependency_overrides[get_redis] = lambda: fake
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        body = (await c.get("/health")).json()
+    assert body == {"status": "ok"}
+    assert "platform" not in body
+    assert "redis" not in body
+
+
 async def test_no_api_key_configured_allows_all(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "environment", "local")
     monkeypatch.setattr(settings, "api_key", None)

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 
 from app.core.event_bus import EventBus
 from app.core.redis_client import get_redis
+from app.settings import settings
 
 router = APIRouter()
 
@@ -69,12 +70,18 @@ def _platform_info() -> dict:
 
 @router.get("/health")
 async def health(redis=Depends(get_redis)) -> dict:
-    plat = _platform_info()
     try:
         await redis.ping()
-        return {"status": "ok", "redis": "connected", "platform": plat}
+        redis_status = "connected"
+        status = "ok"
     except Exception:
-        return {"status": "degraded", "redis": "unreachable", "platform": plat}
+        redis_status = "unreachable"
+        status = "degraded"
+
+    if not settings.is_local:
+        return {"status": status}
+
+    return {"status": status, "redis": redis_status, "platform": _platform_info()}
 
 
 @router.get("/metrics")

@@ -21,9 +21,14 @@ from app.core.redis_client import close_pool, get_redis
 from app.core.ws_auth import parse_ws_auth_protocol
 from app.settings import settings
 
-PUBLIC_PATHS = frozenset({"/health", "/docs", "/openapi.json", "/redoc"})
-
 _PRODUCTION_LIKE_ENVS = frozenset({"production", "staging", "prod"})
+
+
+def public_paths() -> frozenset[str]:
+    """Routes that skip API-key auth and rate limiting (minimal surface outside local)."""
+    if settings.is_local:
+        return frozenset({"/health", "/docs", "/openapi.json", "/redoc"})
+    return frozenset({"/health"})
 
 
 def _client_host_for_rate_limit(request: Request) -> str:
@@ -131,19 +136,20 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 class AuthMiddleware(BaseHTTPMiddleware):
     """
     Bearer-token authentication for all non-public HTTP routes when an API key is set.
-    `/health`, `/docs`, `/openapi.json`, and `/redoc` are exempt. When no API key is
-    configured (e.g. local dev), auth is disabled with a startup warning.
+    `/health` is always exempt; `/docs`, `/openapi.json`, and `/redoc` only in local.
+    When no API key is configured (e.g. local dev), auth is disabled with a startup warning.
     """
 
-    def __init__(self, app, *, api_key: str | None):
+    def __init__(self, app, *, api_key: str | None, public_paths: frozenset[str]):
         super().__init__(app)
         self.api_key = api_key
+        self.public_paths = public_paths
 
     async def dispatch(self, request: Request, call_next):
         if not self.api_key:
             return await call_next(request)
 
-        if request.url.path in PUBLIC_PATHS:
+        if request.url.path in self.public_paths:
             return await call_next(request)
 
         if request.scope.get("type") == "websocket":
@@ -174,14 +180,22 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
     lower limit so abuse cannot bypass throttling entirely.
     """
 
-    def __init__(self, app, *, max_requests: int = 120, window_seconds: int = 60):
+    def __init__(
+        self,
+        app,
+        *,
+        max_requests: int = 120,
+        window_seconds: int = 60,
+        public_paths: frozenset[str],
+    ):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self._fallback_limit = max(1, max_requests // 2)
+        self.public_paths = public_paths
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path in PUBLIC_PATHS:
+        if request.url.path in self.public_paths:
             return await call_next(request)
 
         client = _client_host_for_rate_limit(request)
@@ -229,6 +243,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
         response.headers["Cache-Control"] = "no-store"
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        # JSON API — deny browser-driven subresource loads of responses.
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
         return response
@@ -288,20 +306,27 @@ def create_app() -> FastAPI:
         yield
         await close_pool()
 
+    paths = public_paths()
     app = FastAPI(
         title="Autonomous AI Defense System",
         version="0.1.0",
         lifespan=lifespan,
         docs_url="/docs" if settings.is_local else None,
         redoc_url="/redoc" if settings.is_local else None,
+        openapi_url="/openapi.json" if settings.is_local else None,
     )
 
     # Middleware order: outermost first → innermost last.
     # Starlette applies them bottom-up, so we add in reverse.
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(BodySizeLimitMiddleware)
-    app.add_middleware(RedisRateLimitMiddleware, max_requests=120, window_seconds=60)
-    app.add_middleware(AuthMiddleware, api_key=settings.api_key)
+    app.add_middleware(
+        RedisRateLimitMiddleware,
+        max_requests=120,
+        window_seconds=60,
+        public_paths=paths,
+    )
+    app.add_middleware(AuthMiddleware, api_key=settings.api_key, public_paths=paths)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

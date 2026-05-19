@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import time
@@ -62,7 +63,12 @@ async def events_ws(ws: WebSocket, redis=Depends(get_redis)):
         await ws.close(code=1013, reason="Connection limit reached")
         return
 
-    subprotocol, _ = parse_ws_auth_protocol(ws.headers.get("sec-websocket-protocol"))
+    subprotocol, token = parse_ws_auth_protocol(ws.headers.get("sec-websocket-protocol"))
+    if settings.api_key:
+        if not token or not hmac.compare_digest(token, settings.api_key):
+            await ws.close(code=1008, reason="Unauthorized")
+            return
+
     await ws.accept(subprotocol=subprotocol)
     _active_ws.add(ws)
     bus = EventBus(redis)

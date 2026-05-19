@@ -1,4 +1,5 @@
-# Dependency updates (requires Dependabot enabled for the repo on GitHub).
+# Dependency updates (requires Dependabot + security updates enabled on GitHub).
+# CI: .github/workflows/supply-chain.yml (npm audit, pip-audit, PR dependency review).
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -6,6 +7,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "supply-chain"
+    commit-message:
+      prefix: "deps(backend)"
     groups:
       backend-deps:
         patterns:
@@ -16,6 +22,11 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "supply-chain"
+    commit-message:
+      prefix: "deps(frontend)"
     # Tailwind v4 needs @tailwindcss/postcss + config migration — ignore major until tracked separately.
     ignore:
       - dependency-name: "tailwindcss"
@@ -39,10 +50,20 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "supply-chain"
+    commit-message:
+      prefix: "deps(actions)"
 
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "supply-chain"
+    commit-message:
+      prefix: "deps(docker)"

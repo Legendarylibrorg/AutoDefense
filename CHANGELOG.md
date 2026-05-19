@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **API:** Hide OpenAPI outside `local`; redact sensitive `/health` fields in non-local environments; require API key on WebSocket connections; add security headers on HTTP responses.
 - **Docker:** Read-only root filesystem defaults where applicable; dashboard nginx CSP via `nginx.conf.template` and envsubst for connect-src.
 - **Supply chain:** Dependabot grouping tweaks; backend minimum versions for cryptography and related deps; Vite/Rolldown bump in frontend lockfile; `scripts/sync_vite_lock.py` for lockfile hygiene.
+- **Supply chain (hardening):** `.github/workflows/supply-chain.yml` (weekly `npm audit`, OSV lockfile scan, PR dependency review); backend CI uses `uv sync --frozen`; frontend CI runs `npm audit`; `frontend/.npmrc` audit defaults; refreshed `uv.lock` and `package-lock.json`.
 
 ### Fixed
 

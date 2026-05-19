@@ -115,11 +115,28 @@ export const SESSION_KEYS = {
   transportKeyB64: "autodefense_transport_key_b64",
 } as const;
 
-const httpBase = import.meta.env.VITE_BACKEND_HTTP ?? "http://localhost:8000";
-const wsBase = import.meta.env.VITE_BACKEND_WS ?? "ws://localhost:8000";
+function resolveHttpBase(): string {
+  const fromEnv = import.meta.env.VITE_BACKEND_HTTP as string | undefined;
+  if (fromEnv?.trim()) return fromEnv.trim().replace(/\/$/, "");
+  if (import.meta.env.DEV) return "";
+  return "http://localhost:8000";
+}
+
+function resolveWsBase(): string {
+  const fromEnv = import.meta.env.VITE_BACKEND_WS as string | undefined;
+  if (fromEnv?.trim()) return fromEnv.trim().replace(/\/$/, "");
+  if (import.meta.env.DEV) {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${window.location.host}`;
+  }
+  return "ws://localhost:8000";
+}
+
+const httpBase = resolveHttpBase();
+const wsBase = resolveWsBase();
 
 function apiRoot(): string {
-  return httpBase.replace(/\/$/, "");
+  return httpBase;
 }
 
 export function getResolvedApiKey(): string | undefined {

@@ -18,7 +18,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api.router import api_router
 from app.core.logging import configure_logging
 from app.core.redis_client import close_pool, get_redis
-from app.core.ws_auth import parse_ws_auth_protocol
 from app.settings import settings
 
 _PRODUCTION_LIKE_ENVS = frozenset({"production", "staging", "prod"})
@@ -152,11 +151,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if request.url.path in self.public_paths:
             return await call_next(request)
 
+        # WebSocket routes enforce auth at accept time (close 1008); JSON 401 is invalid on upgrade.
         if request.scope.get("type") == "websocket":
-            _, token = parse_ws_auth_protocol(request.headers.get("sec-websocket-protocol"))
-        else:
-            auth = request.headers.get("Authorization", "")
-            token = auth.removeprefix("Bearer ").strip()
+            return await call_next(request)
+
+        auth = request.headers.get("Authorization", "")
+        token = auth.removeprefix("Bearer ").strip()
 
         if not token or not hmac.compare_digest(token, self.api_key):
             return JSONResponse(

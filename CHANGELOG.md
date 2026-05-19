@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Docs:** Align stack versions (React 19, Vite 8), clarify Compose Redis is internal-only, and document frontend dev API URLs / Vite proxy behavior.
+- **Backend:** Skip broken WebSocket auth in HTTP middleware (routes close with 1008); key `/health` platform cache by environment; pin Docker image deps via `uv.lock`.
+- **Frontend:** Vite dev proxy for API paths; use same-origin URLs in dev when `VITE_BACKEND_*` are unset.
+- **Tooling:** Generalize `scripts/publish-pr.sh` (`--fill` or `PR_TITLE` / `PR_BODY_FILE`).
+
+### Added
+
+- **Tests:** `test_routes_and_middleware.py` for `/alerts`, `/metrics`, security headers, body-size limit, SSE content-type, and platform cache keys.
+
 ### Security
 
 - **API:** Hide OpenAPI outside `local`; redact sensitive `/health` fields in non-local environments; require API key on WebSocket connections; add security headers on HTTP responses.

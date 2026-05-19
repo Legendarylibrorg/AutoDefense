@@ -163,6 +163,6 @@ Each encrypted blob uses **one** random-data master per domain (transport vs at-
 | Backend | Python 3.11, FastAPI, Pydantic, uvicorn |
 | Event bus | Redis 7 Streams |
 | Encryption | Python `cryptography` (AESGCM, HKDF), Web Crypto API (AES-GCM, HKDF, HMAC) |
-| Frontend | React 18, TypeScript, Vite 6, Tailwind CSS, Recharts |
+| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS, Recharts |
 | Serving | nginx (frontend), uvicorn (backend) |
 | Containerization | Docker, Docker Compose |

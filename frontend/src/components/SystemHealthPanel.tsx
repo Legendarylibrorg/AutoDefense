@@ -1,21 +1,14 @@
 import type { HealthInfo } from "../lib/api";
 
-function redisLabel(health: HealthInfo | null): string {
-  if (!health) return "checking…";
-  if (!health.redis) return "unknown";
-  return health.redis === "connected" ? "connected" : health.redis;
-}
-
-function redisTone(health: HealthInfo | null): string {
-  if (!health?.redis) return "text-muted";
-  return health.redis === "connected" ? "text-ok" : "text-warn";
-}
-
 export function SystemHealthPanel(props: {
   health: HealthInfo | null;
   metrics: Record<string, unknown> | null;
 }) {
   const { health, metrics } = props;
+  const redis = health?.redis;
+  const redisLabel = !health ? "checking…" : redis === "connected" ? "connected" : redis ?? "unknown";
+  const redisTone =
+    redis === "connected" ? "text-ok" : health?.redis ? "text-warn" : "text-muted";
   const eventTotal =
     typeof metrics?.events_total_recent === "number" ? metrics.events_total_recent : null;
   const byType =
@@ -44,7 +37,7 @@ export function SystemHealthPanel(props: {
         </div>
         <div className="rounded-lg border border-white/10 bg-black/10 p-3">
           <div className="text-xs text-muted">Redis</div>
-          <div className={`mt-1 text-sm font-semibold ${redisTone(health)}`}>{redisLabel(health)}</div>
+          <div className={`mt-1 text-sm font-semibold ${redisTone}`}>{redisLabel}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-black/10 p-3">
           <div className="text-xs text-muted">Recent events (stream tail)</div>

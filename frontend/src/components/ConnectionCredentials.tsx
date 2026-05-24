@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { SESSION_KEYS } from "../lib/api";
+import { credentialStatus, SESSION_KEYS } from "../lib/api";
 
 export function ConnectionCredentials() {
   const [apiKey, setApiKey] = useState("");
   const [transportKey, setTransportKey] = useState("");
-  const sealEnabled = (import.meta.env.VITE_TRANSPORT_SEAL_ENABLED ?? "false") === "true";
+  const creds = credentialStatus();
 
   useEffect(() => {
     try {
@@ -30,8 +30,26 @@ export function ConnectionCredentials() {
   }
 
   return (
-    <details className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs">
-      <summary className="cursor-pointer select-none font-medium text-muted">API session keys</summary>
+    <details
+      className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs"
+      open={creds.needsApiKey || creds.needsTransportKey}
+    >
+      <summary className="cursor-pointer select-none font-medium text-muted">
+        API session keys
+        {creds.needsApiKey ? (
+          <span className="ml-2 rounded border border-warn/40 px-1.5 py-0.5 text-[10px] text-warn">
+            API key required
+          </span>
+        ) : creds.needsTransportKey ? (
+          <span className="ml-2 rounded border border-warn/40 px-1.5 py-0.5 text-[10px] text-warn">
+            Transport key required
+          </span>
+        ) : (
+          <span className="ml-2 rounded border border-ok/40 px-1.5 py-0.5 text-[10px] text-ok">
+            Configured
+          </span>
+        )}
+      </summary>
       <p className="mt-2 max-w-sm text-muted">
         Stored only in this browser tab (sessionStorage). Leave blank to use build-time Vite env values for
         local development.
@@ -47,7 +65,7 @@ export function ConnectionCredentials() {
           placeholder="AUTODEFENSE_API_KEY"
         />
       </label>
-      {sealEnabled ? (
+      {creds.sealEnabled ? (
         <label className="mt-2 block text-muted">
           Transport key (base64, 32 bytes)
           <input

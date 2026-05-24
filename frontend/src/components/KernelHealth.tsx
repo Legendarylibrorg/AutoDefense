@@ -153,31 +153,32 @@ function ScanResultView({ status }: { status: KernelStatus }) {
   );
 }
 
-export function KernelHealth() {
-  const [health, setHealth] = useState<HealthInfo | null>(null);
+export function KernelHealth(props: { health?: HealthInfo | null }) {
   const [status, setStatus] = useState<KernelStatus | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
     const tick = async () => {
       try {
-        const [h, s] = await Promise.all([API.fetchHealth(), API.fetchKernelStatus()]);
-        if (!cancelled) {
-          setHealth(h);
-          setStatus(s);
-        }
-      } catch {
-        // silent — will retry
+        const s = await API.fetchKernelStatus({ signal: controller.signal });
+        if (!cancelled) setStatus(s);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
       }
     };
     tick();
     const id = setInterval(tick, 10_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearInterval(id);
+    };
   }, []);
 
   if (status?.scanned) {
     return <ScanResultView status={status} />;
   }
 
-  return <NoScanView health={health} />;
+  return <NoScanView health={props.health ?? null} />;
 }

@@ -51,6 +51,7 @@ class Settings(BaseSettings):
 
     # Connection limits
     max_ws_connections: int = 50
+    max_sse_connections: int = 50
     sse_timeout_seconds: int = 3600
 
     @property

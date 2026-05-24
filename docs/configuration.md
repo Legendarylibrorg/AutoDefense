@@ -53,6 +53,7 @@ At-rest and sealed transport each use **one** base64-encoded **32-byte master** 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `AUTODEFENSE_MAX_WS_CONNECTIONS` | int | `50` | Maximum concurrent WebSocket connections |
+| `AUTODEFENSE_MAX_SSE_CONNECTIONS` | int | `50` | Maximum concurrent SSE (`/events/stream`) connections |
 | `AUTODEFENSE_SSE_TIMEOUT_SECONDS` | int | `3600` | SSE stream idle timeout (seconds) |
 
 ### Frontend (Vite build-time)

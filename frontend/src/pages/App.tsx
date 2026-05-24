@@ -8,6 +8,7 @@ import { EventFeed } from "../components/EventFeed";
 import { KernelHealth } from "../components/KernelHealth";
 import { StatCard } from "../components/StatCard";
 import { ConnectionCredentials } from "../components/ConnectionCredentials";
+import { SystemHealthPanel } from "../components/SystemHealthPanel";
 import { osLabel } from "../lib/platform";
 
 const RiskChart = lazy(() =>
@@ -39,7 +40,7 @@ function countDecisions(events: EventItem[]) {
 }
 
 export function App() {
-  const { events, connected } = useEventStream(600);
+  const { events, connected, authRequired } = useEventStream(600);
   const [alerts, setAlerts] = useState<EventItem[]>([]);
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [health, setHealth] = useState<HealthInfo | null>(null);
@@ -48,22 +49,29 @@ export function App() {
   >(undefined);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
     const tick = async () => {
       try {
-        const [a, m, h] = await Promise.all([API.fetchAlerts(), API.fetchMetrics(), API.fetchHealth()]);
+        const opts = { signal: controller.signal };
+        const [a, m, h] = await Promise.all([
+          API.fetchAlerts(opts),
+          API.fetchMetrics(opts),
+          API.fetchHealth(opts),
+        ]);
         if (cancelled) return;
         setAlerts(a);
         setMetrics(m);
         setHealth(h);
-      } catch {
-        // ignore
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
       }
     };
     tick();
     const id = setInterval(tick, 3000);
     return () => {
       cancelled = true;
+      controller.abort();
       clearInterval(id);
     };
   }, []);
@@ -115,6 +123,15 @@ export function App() {
         </div>
       </header>
 
+      {authRequired ? (
+        <div className="mx-auto max-w-7xl px-6 pb-2">
+          <div className="rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-warn">
+            Authentication required — paste your API key (and transport key if sealed transport is on) under{" "}
+            <strong>API session keys</strong>, then save and reload.
+          </div>
+        </div>
+      ) : null}
+
       <main className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-6 pb-10 lg:grid-cols-12">
         <section className="grid grid-cols-1 gap-4 lg:col-span-12 lg:grid-cols-4">
           <StatCard title="Recent events" value={events.length} hint="Redis stream tail" />
@@ -150,16 +167,13 @@ export function App() {
               }
             />
           </div>
-          <div className="mt-6 rounded-xl border border-white/10 bg-panel p-4">
-            <div className="text-sm font-semibold">System health</div>
-            <pre className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-black/20 p-3 text-xs text-muted">
-              {JSON.stringify(metrics ?? { loading: true }, null, 2)}
-            </pre>
+          <div className="mt-6">
+            <SystemHealthPanel health={health} metrics={metrics} />
           </div>
         </section>
 
         <section className="lg:col-span-5">
-          <KernelHealth />
+          <KernelHealth health={health} />
           <div className="mt-6">
             <EventFeed events={events} />
           </div>

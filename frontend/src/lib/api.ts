@@ -161,11 +161,34 @@ export function getResolvedTransportKeyB64(): string | undefined {
   return fromEnv || undefined;
 }
 
-function transportSealEnabled(): boolean {
+export function transportSealEnabled(): boolean {
   return (
     (import.meta.env.VITE_TRANSPORT_SEAL_ENABLED ?? "false") === "true" &&
     !!getResolvedTransportKeyB64()
   );
+}
+
+export function credentialStatus(): {
+  hasApiKey: boolean;
+  hasTransportKey: boolean;
+  sealEnabled: boolean;
+  needsApiKey: boolean;
+  needsTransportKey: boolean;
+} {
+  const sealEnabled = (import.meta.env.VITE_TRANSPORT_SEAL_ENABLED ?? "false") === "true";
+  const hasApiKey = !!getResolvedApiKey();
+  const hasTransportKey = !!getResolvedTransportKeyB64();
+  return {
+    hasApiKey,
+    hasTransportKey,
+    sealEnabled,
+    needsApiKey: !hasApiKey,
+    needsTransportKey: sealEnabled && !hasTransportKey,
+  };
+}
+
+function transportSealActive(): boolean {
+  return transportSealEnabled();
 }
 
 function authHeaders(): Record<string, string> {
@@ -186,7 +209,25 @@ export function errorMessage(err: unknown): string {
   return String(err);
 }
 
-async function formatHttpError(res: Response, label: string): Promise<string> {
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+export type FetchOptions = { signal?: AbortSignal };
+
+function withSignal(init: RequestInit | undefined, opts?: FetchOptions): RequestInit {
+  const base = init ?? {};
+  if (!opts?.signal) return base;
+  return { ...base, signal: opts.signal };
+}
+
+export async function formatHttpError(res: Response, label: string): Promise<string> {
   let detail = `${label} failed (${res.status})`;
   try {
     const body = (await res.json()) as { detail?: unknown };
@@ -214,35 +255,47 @@ async function formatHttpError(res: Response, label: string): Promise<string> {
 }
 
 async function readJson<T>(res: Response, label: string): Promise<T> {
-  if (!res.ok) throw new Error(await formatHttpError(res, label));
+  if (!res.ok) throw new HttpError(await formatHttpError(res, label), res.status);
   return res.json() as Promise<T>;
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${apiRoot()}${path}`, authGet());
+async function getJson<T>(path: string, opts?: FetchOptions): Promise<T> {
+  const res = await fetch(`${apiRoot()}${path}`, withSignal(authGet(), opts));
   return readJson<T>(res, `${path}`);
 }
 
-async function getJsonPublic<T>(path: string): Promise<T> {
-  const res = await fetch(`${apiRoot()}${path}`);
+async function getJsonPublic<T>(path: string, opts?: FetchOptions): Promise<T> {
+  const res = await fetch(`${apiRoot()}${path}`, withSignal(undefined, opts));
   return readJson<T>(res, `${path}`);
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${apiRoot()}${path}`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(body),
-  });
+async function postJson<T>(path: string, body: unknown, opts?: FetchOptions): Promise<T> {
+  const res = await fetch(
+    `${apiRoot()}${path}`,
+    withSignal(
+      {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      },
+      opts,
+    ),
+  );
   return readJson<T>(res, `${path}`);
 }
 
-async function putJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${apiRoot()}${path}`, {
-    method: "PUT",
-    headers: authHeaders(),
-    body: JSON.stringify(body),
-  });
+async function putJson<T>(path: string, body: unknown, opts?: FetchOptions): Promise<T> {
+  const res = await fetch(
+    `${apiRoot()}${path}`,
+    withSignal(
+      {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      },
+      opts,
+    ),
+  );
   return readJson<T>(res, `${path}`);
 }
 
@@ -336,39 +389,39 @@ export const API = {
     const k = getResolvedApiKey();
     return k ? [`auth.${k}`] : undefined;
   },
-  fetchHealth(): Promise<HealthInfo> {
-    return getJsonPublic<HealthInfo>("/health");
+  fetchHealth(opts?: FetchOptions): Promise<HealthInfo> {
+    return getJsonPublic<HealthInfo>("/health", opts);
   },
-  fetchEvents(): Promise<EventItem[]> {
-    return getJson<EventItem[]>("/events");
+  fetchEvents(opts?: FetchOptions): Promise<EventItem[]> {
+    return getJson<EventItem[]>("/events", opts);
   },
-  fetchAlerts(): Promise<EventItem[]> {
-    return getJson<EventItem[]>("/alerts");
+  fetchAlerts(opts?: FetchOptions): Promise<EventItem[]> {
+    return getJson<EventItem[]>("/alerts", opts);
   },
-  fetchMetrics(): Promise<Record<string, unknown>> {
-    return getJson<Record<string, unknown>>("/metrics");
+  fetchMetrics(opts?: FetchOptions): Promise<Record<string, unknown>> {
+    return getJson<Record<string, unknown>>("/metrics", opts);
   },
-  fetchConfig(): Promise<RuntimeConfig> {
-    return getJson<RuntimeConfig>("/config");
+  fetchConfig(opts?: FetchOptions): Promise<RuntimeConfig> {
+    return getJson<RuntimeConfig>("/config", opts);
   },
-  putConfig(cfg: RuntimeConfig): Promise<RuntimeConfig> {
-    return putJson<RuntimeConfig>("/config", cfg);
+  putConfig(cfg: RuntimeConfig, opts?: FetchOptions): Promise<RuntimeConfig> {
+    return putJson<RuntimeConfig>("/config", cfg, opts);
   },
   async scanArtifacts(artifacts: Artifact[]): Promise<ScanResponse> {
-    const sealed = transportSealEnabled();
+    const sealed = transportSealActive();
     const path = sealed ? "/scan/sealed" : "/scan";
     const body = sealed ? { sealed: await sealJson({ artifacts }, "scan") } : { artifacts };
     return postJson<ScanResponse>(path, body);
   },
-  fetchKernelStatus(): Promise<KernelStatus> {
-    return getJson<KernelStatus>("/kernel/status");
+  fetchKernelStatus(opts?: FetchOptions): Promise<KernelStatus> {
+    return getJson<KernelStatus>("/kernel/status", opts);
   },
   async analyzeInput(req: {
     user_input: string;
     model_output?: string;
     tool_calls?: Array<Record<string, unknown>>;
   }): Promise<AnalyzeResponse> {
-    const sealed = transportSealEnabled();
+    const sealed = transportSealActive();
     const path = sealed ? "/analyze/sealed" : "/analyze";
     const body = sealed ? { sealed: await sealJson(req, "analyze") } : req;
     return postJson<AnalyzeResponse>(path, body);

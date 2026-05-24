@@ -35,7 +35,106 @@ flowchart LR
   FE -->|REST| GW
 ```
 
-## Quick start
+## Getting started (from git clone)
+
+### Prerequisites
+
+| Tool | Required for |
+|------|----------------|
+| **Git** | Clone the repository |
+| **Docker** + **Docker Compose v2** | Full stack (recommended) |
+| **OpenSSL** or **Python 3** | Auto-generating secrets in `scripts/start.sh` |
+
+For local backend/frontend development without Docker, see [docs/setup.md](docs/setup.md) (Python 3.11+, Node.js 20+, optional Redis).
+
+### Step 1 — Clone the repository
+
+```bash
+git clone https://github.com/Legendarylibrorg/AutoDefense.git
+cd AutoDefense
+```
+
+Use your fork URL if you contribute via a fork.
+
+### Step 2 — Create environment file
+
+```bash
+cp .env.example .env
+```
+
+The start script (next step) copies this automatically if `.env` is missing and fills any **empty** secrets for local development: API key, scanner HMAC key, Redis password, data encryption key, and transport key.
+
+### Step 3 — Start the stack
+
+```bash
+# macOS / Linux
+chmod +x scripts/start.sh
+./scripts/start.sh
+
+# Windows (PowerShell)
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\start.ps1
+```
+
+The script will:
+
+1. Ensure `.env` exists.
+2. Generate any still-empty secrets (`openssl` or `python3`).
+3. Print your **API key once** — save it for the dashboard and API calls.
+4. Validate the Compose config, then run **`docker compose up --build`**.
+
+Wait until all containers are healthy (backend, frontend, Redis).
+
+### Step 4 — Open the dashboard
+
+| URL | What |
+|-----|------|
+| http://localhost:3000 | React dashboard |
+| http://localhost:8000/health | Health check (no auth) |
+| http://localhost:8000/docs | Swagger API docs — only when `AUTODEFENSE_ENVIRONMENT=local` |
+
+### Step 5 — Connect the dashboard
+
+1. Open http://localhost:3000
+2. Expand **API session keys** in the header.
+3. Paste the API key printed by `scripts/start.sh` (or read it from `.env`: `AUTODEFENSE_API_KEY`).
+4. If sealed transport is enabled (default), also paste **Transport key** from `AUTODEFENSE_TRANSPORT_KEY_B64` in `.env`.
+5. Click **Save and reload**.
+
+The live event feed should show **Live** (green) when connected.
+
+### Step 6 — Verify the API (optional)
+
+```bash
+API_KEY=$(grep '^AUTODEFENSE_API_KEY=' .env | cut -d= -f2-)
+
+curl -s http://localhost:8000/health | python3 -m json.tool
+
+curl -s -X POST http://localhost:8000/analyze \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"user_input":"Hello, world"}' | python3 -m json.tool
+```
+
+### Optional — Compose profiles
+
+```bash
+docker compose --profile demo up --build       # attack simulator
+docker compose --profile security up --build   # Linux kernel scanner sidecar
+```
+
+### Next steps
+
+| Topic | Document |
+|-------|----------|
+| Local dev (no Docker), host scanners, full env reference | [docs/setup.md](docs/setup.md) |
+| All environment variables | [docs/configuration.md](docs/configuration.md) |
+| Encryption (HKDF subkeys, sealed transport) | [docs/security.md](docs/security.md#encryption) |
+| Production deployment | [docs/deployment.md](docs/deployment.md) |
+
+## Quick start (one command)
+
+If you already cloned the repo and have Docker installed:
 
 ```bash
 # macOS / Linux
@@ -45,15 +144,7 @@ flowchart LR
 .\scripts\start.ps1
 ```
 
-This copies `.env.example` to `.env`, auto-generates encryption keys and API key, and runs `docker compose up --build`.
-
-**Full walkthrough from `git clone`:** [docs/setup.md](docs/setup.md) (prerequisites, `.env`, Docker, local dev, scanners, links to encryption docs).
-
-| URL | What |
-|-----|------|
-| http://localhost:3000 | Dashboard |
-| http://localhost:8000/docs | API docs (Swagger) — served only when `AUTODEFENSE_ENVIRONMENT` normalizes to `local` |
-| http://localhost:8000/health | Health + Redis status; full platform detail only in `local` |
+This copies `.env.example` to `.env` when needed, auto-generates keys, and runs `docker compose up --build`.
 
 ## What it defends against
 

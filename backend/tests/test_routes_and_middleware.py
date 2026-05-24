@@ -106,8 +106,9 @@ async def test_body_too_large_returns_413(authed_app):
 async def test_sse_connection_limit_returns_503(authed_app, monkeypatch: pytest.MonkeyPatch):
     from app.api.routes import events as events_route
 
-    monkeypatch.setattr(settings, "max_ws_connections", 1)
-    events_route._active_sse = 1  # at limit for max_ws_connections=1
+    monkeypatch.setattr(settings, "max_sse_connections", 1)
+    monkeypatch.setattr(settings, "max_ws_connections", 10)
+    events_route._active_sse = 1  # at limit for max_sse_connections=1
     app, _ = authed_app
     transport = ASGITransport(app=app)
     async with AsyncClient(
@@ -118,6 +119,26 @@ async def test_sse_connection_limit_returns_503(authed_app, monkeypatch: pytest.
         res = await client.get("/events/stream")
     assert res.status_code == 503
     assert res.json()["detail"] == "SSE connection limit reached"
+    events_route._active_sse = 0
+
+
+async def test_sse_limit_independent_of_ws_limit(authed_app, monkeypatch: pytest.MonkeyPatch):
+    """SSE cap uses max_sse_connections; a full SSE slot does not block WebSocket upgrade."""
+    from app.api.routes import events as events_route
+
+    monkeypatch.setattr(settings, "max_sse_connections", 1)
+    monkeypatch.setattr(settings, "max_ws_connections", 5)
+    events_route._active_sse = 1
+    events_route._active_ws.clear()
+    app, _ = authed_app
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {TEST_API_KEY}"},
+    ) as client:
+        res = await client.get("/events")
+    assert res.status_code == 200
     events_route._active_sse = 0
 
 

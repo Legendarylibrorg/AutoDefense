@@ -8,6 +8,7 @@ import { EventFeed } from "../components/EventFeed";
 import { KernelHealth } from "../components/KernelHealth";
 import { StatCard } from "../components/StatCard";
 import { ConnectionCredentials } from "../components/ConnectionCredentials";
+import { SystemHealthPanel } from "../components/SystemHealthPanel";
 import { osLabel } from "../lib/platform";
 
 const RiskChart = lazy(() =>
@@ -48,22 +49,29 @@ export function App() {
   >(undefined);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
     const tick = async () => {
       try {
-        const [a, m, h] = await Promise.all([API.fetchAlerts(), API.fetchMetrics(), API.fetchHealth()]);
+        const opts = { signal: controller.signal };
+        const [a, m, h] = await Promise.all([
+          API.fetchAlerts(opts),
+          API.fetchMetrics(opts),
+          API.fetchHealth(opts),
+        ]);
         if (cancelled) return;
         setAlerts(a);
         setMetrics(m);
         setHealth(h);
-      } catch {
-        // ignore
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
       }
     };
     tick();
     const id = setInterval(tick, 3000);
     return () => {
       cancelled = true;
+      controller.abort();
       clearInterval(id);
     };
   }, []);
@@ -159,11 +167,8 @@ export function App() {
               }
             />
           </div>
-          <div className="mt-6 rounded-xl border border-white/10 bg-panel p-4">
-            <div className="text-sm font-semibold">System health</div>
-            <pre className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-black/20 p-3 text-xs text-muted">
-              {JSON.stringify(metrics ?? { loading: true }, null, 2)}
-            </pre>
+          <div className="mt-6">
+            <SystemHealthPanel health={health} metrics={metrics} />
           </div>
         </section>
 

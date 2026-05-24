@@ -32,7 +32,7 @@ async def get_events(redis=Depends(get_redis)) -> list[dict]:
 @router.get("/events/stream")
 async def stream_events(redis=Depends(get_redis)):
     async with _sse_lock:
-        if _active_sse >= settings.max_ws_connections:
+        if _active_sse >= settings.max_sse_connections:
             return JSONResponse(
                 status_code=503,
                 content={"detail": "SSE connection limit reached"},
@@ -44,7 +44,7 @@ async def stream_events(redis=Depends(get_redis)):
     async def gen():
         global _active_sse
         async with _sse_lock:
-            if _active_sse >= settings.max_ws_connections:
+            if _active_sse >= settings.max_sse_connections:
                 yield 'data: {"detail":"SSE connection limit reached"}\n\n'
                 return
             _active_sse += 1

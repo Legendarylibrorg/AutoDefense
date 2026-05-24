@@ -10,16 +10,17 @@ export function useEventStream(maxItems: number = 500) {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
 
-    API.fetchEvents()
+    API.fetchEvents({ signal: controller.signal })
       .then((initial) => {
         if (cancelled) return;
         setEvents(initial.slice(-maxItems));
         setAuthRequired(false);
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (cancelled || (err instanceof DOMException && err.name === "AbortError")) return;
         if (err instanceof HttpError && err.status === 401) setAuthRequired(true);
       });
 
@@ -62,6 +63,7 @@ export function useEventStream(maxItems: number = 500) {
 
     return () => {
       cancelled = true;
+      controller.abort();
       if (reconnectTimerRef.current !== null) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;

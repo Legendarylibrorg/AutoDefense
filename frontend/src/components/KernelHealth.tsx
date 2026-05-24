@@ -157,19 +157,21 @@ export function KernelHealth(props: { health?: HealthInfo | null }) {
   const [status, setStatus] = useState<KernelStatus | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
     const tick = async () => {
       try {
-        const s = await API.fetchKernelStatus();
+        const s = await API.fetchKernelStatus({ signal: controller.signal });
         if (!cancelled) setStatus(s);
-      } catch {
-        // silent — will retry
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
       }
     };
     tick();
     const id = setInterval(tick, 10_000);
     return () => {
       cancelled = true;
+      controller.abort();
       clearInterval(id);
     };
   }, []);

@@ -11,6 +11,23 @@ from app.settings import settings
 logger = logging.getLogger("autodefense.event_bus")
 
 
+def _parse_event_field(fields: dict) -> Event | None:
+    payload = fields.get(b"event") or fields.get("event")
+    if not payload:
+        return None
+    if isinstance(payload, (bytes, bytearray)):
+        payload = payload.decode("utf-8", errors="replace")
+    try:
+        return Event.model_validate_json(payload)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Failed to decode event",
+            exc_info=True,
+            extra={"event_type": "decode_error"},
+        )
+        return None
+
+
 class EventBus:
     def __init__(self, redis: Redis):
         self.redis = redis
@@ -28,15 +45,9 @@ class EventBus:
         raw = await self.redis.xrevrange(self.stream_key, max="+", min="-", count=count)
         events: list[Event] = []
         for _id, fields in raw:
-            payload = fields.get(b"event") or fields.get("event")
-            if not payload:
-                continue
-            if isinstance(payload, (bytes, bytearray)):
-                payload = payload.decode("utf-8", errors="replace")
-            try:
-                events.append(Event.model_validate_json(payload))
-            except Exception:  # noqa: BLE001
-                logger.warning("Failed to decode event", extra={"event_type": "decode_error"})
+            event = _parse_event_field(fields)
+            if event is not None:
+                events.append(event)
         events.reverse()
         return events
 
@@ -49,14 +60,6 @@ class EventBus:
             for _stream, messages in results:
                 for msg_id, fields in messages:
                     last_id = msg_id
-                    payload = fields.get(b"event") or fields.get("event")
-                    if not payload:
-                        continue
-                    if isinstance(payload, (bytes, bytearray)):
-                        payload = payload.decode("utf-8", errors="replace")
-                    try:
-                        yield Event.model_validate_json(payload)
-                    except Exception:  # noqa: BLE001
-                        logger.warning(
-                            "Failed to decode streamed event", extra={"event_type": "decode_error"}
-                        )
+                    event = _parse_event_field(fields)
+                    if event is not None:
+                        yield event

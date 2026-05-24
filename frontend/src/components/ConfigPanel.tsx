@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { API, type RuntimeConfig } from "../lib/api";
+import { API, errorMessage, type RuntimeConfig } from "../lib/api";
 
 function clampInt(v: number, lo: number, hi: number) {
    return Math.max(lo, Math.min(hi, Math.round(v)));
@@ -47,8 +47,8 @@ function clampInt(v: number, lo: number, hi: number) {
          setCfg(c);
          setDraft(c);
         onConfigRef.current?.(c);
-       } catch (e: any) {
-         setErr(String(e?.message ?? e));
+       } catch (e: unknown) {
+         setErr(errorMessage(e));
        } finally {
          setLoading(false);
        }
@@ -67,8 +67,8 @@ function clampInt(v: number, lo: number, hi: number) {
        setCfg(saved);
        setDraft(saved);
       onConfigRef.current?.(saved);
-     } catch (e: any) {
-       setErr(String(e?.message ?? e));
+     } catch (e: unknown) {
+       setErr(errorMessage(e));
      } finally {
        setSaving(false);
      }

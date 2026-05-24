@@ -181,8 +181,40 @@ function authGet(): RequestInit | undefined {
   return { headers: { Authorization: `Bearer ${key}` } };
 }
 
+export function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+async function formatHttpError(res: Response, label: string): Promise<string> {
+  let detail = `${label} failed (${res.status})`;
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    const d = body.detail;
+    if (typeof d === "string" && d.trim()) return d;
+    if (Array.isArray(d)) {
+      const parts = d
+        .map((item) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object" && "message" in item) {
+            const msg = (item as { message?: unknown }).message;
+            const field = (item as { field?: unknown }).field;
+            if (typeof msg === "string" && typeof field === "string") return `${field}: ${msg}`;
+            if (typeof msg === "string") return msg;
+          }
+          return null;
+        })
+        .filter(Boolean);
+      if (parts.length) return parts.join("; ");
+    }
+  } catch {
+    /* ignore non-JSON error bodies */
+  }
+  return detail;
+}
+
 async function readJson<T>(res: Response, label: string): Promise<T> {
-  if (!res.ok) throw new Error(`${label} failed: ${res.status}`);
+  if (!res.ok) throw new Error(await formatHttpError(res, label));
   return res.json() as Promise<T>;
 }
 

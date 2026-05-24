@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import logging
@@ -18,6 +19,7 @@ logger = logging.getLogger("autodefense.events")
 
 _active_ws: set[WebSocket] = set()
 _active_sse: int = 0
+_sse_lock = asyncio.Lock()
 
 
 @router.get("/events")
@@ -29,19 +31,23 @@ async def get_events(redis=Depends(get_redis)) -> list[dict]:
 
 @router.get("/events/stream")
 async def stream_events(redis=Depends(get_redis)):
-    global _active_sse
-    if _active_sse >= settings.max_ws_connections:
-        return JSONResponse(
-            status_code=503,
-            content={"detail": "SSE connection limit reached"},
-        )
+    async with _sse_lock:
+        if _active_sse >= settings.max_ws_connections:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "SSE connection limit reached"},
+            )
 
     bus = EventBus(redis)
     timeout = settings.sse_timeout_seconds
 
     async def gen():
         global _active_sse
-        _active_sse += 1
+        async with _sse_lock:
+            if _active_sse >= settings.max_ws_connections:
+                yield 'data: {"detail":"SSE connection limit reached"}\n\n'
+                return
+            _active_sse += 1
         start = time.monotonic()
         try:
             async for e in bus.stream_events():
@@ -50,7 +56,8 @@ async def stream_events(redis=Depends(get_redis)):
                     yield 'data: {"event": "timeout"}\n\n'
                     break
         finally:
-            _active_sse -= 1
+            async with _sse_lock:
+                _active_sse -= 1
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 

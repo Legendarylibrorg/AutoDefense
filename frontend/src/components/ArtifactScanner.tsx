@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SignalList } from "./SignalList";
 import { actionTone } from "../lib/actionTone";
-import { API, type Artifact, type ArtifactKind, type ScanResponse } from "../lib/api";
+import { API, errorMessage, type Artifact, type ArtifactKind, type ScanResponse } from "../lib/api";
 import { bytesToBase64 } from "../lib/encoding";
 
 async function fileToArtifact(file: File, kind: ArtifactKind): Promise<Artifact> {
@@ -33,6 +33,16 @@ export function ArtifactScanner() {
   }, [kind, text, files]);
 
   const scan = useCallback(async () => {
+    const sig = JSON.stringify({
+      kind,
+      text: kind === "file" || kind === "image" ? "" : text,
+      files:
+        kind === "file" || kind === "image"
+          ? Array.from(files ?? []).map((f) => `${f.name}:${f.size}`)
+          : [],
+    });
+    if (sig === lastSigRef.current) return;
+
     setErr(null);
     setResult(null);
     setShowDetails(false);
@@ -47,23 +57,15 @@ export function ArtifactScanner() {
           {
             kind,
             name: kind.toUpperCase(),
-            content_text: text
-          }
+            content_text: text,
+          },
         ];
-      }
-      const sig = JSON.stringify({
-        kind,
-        text: kind === "file" || kind === "image" ? "" : text,
-        files: kind === "file" || kind === "image" ? Array.from(files ?? []).map((f) => `${f.name}:${f.size}`) : []
-      });
-      if (sig === lastSigRef.current) {
-        return;
       }
       lastSigRef.current = sig;
       const res = await API.scanArtifacts(artifacts);
       setResult(res);
-    } catch (e: any) {
-      setErr(String(e?.message ?? e));
+    } catch (e: unknown) {
+      setErr(errorMessage(e));
     } finally {
       setRunning(false);
     }

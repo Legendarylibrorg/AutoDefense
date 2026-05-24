@@ -6,6 +6,7 @@ export function useEventStream(maxItems: number = 500) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const retriesRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,9 +31,9 @@ export function useEventStream(maxItems: number = 500) {
       ws.onclose = () => {
         setConnected(false);
         if (!cancelled) {
-          const delay = Math.min(1000 * Math.pow(2, retriesRef.current), 30_000);
+          const delay = Math.min(1000 * 2 ** retriesRef.current, 30_000);
           retriesRef.current += 1;
-          setTimeout(connect, delay);
+          reconnectTimerRef.current = setTimeout(connect, delay);
         }
       };
 
@@ -55,7 +56,15 @@ export function useEventStream(maxItems: number = 500) {
 
     return () => {
       cancelled = true;
-      try { wsRef.current?.close(); } catch { /* ignore */ }
+      if (reconnectTimerRef.current !== null) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      try {
+        wsRef.current?.close();
+      } catch {
+        /* ignore */
+      }
     };
   }, [maxItems]);
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SignalList } from "./SignalList";
 import { actionTone } from "../lib/actionTone";
-import { API, type AnalyzeResponse } from "../lib/api";
+import { API, errorMessage, type AnalyzeResponse } from "../lib/api";
 
 export function AnalyzePanel() {
   const [userInput, setUserInput] = useState("");
@@ -23,8 +23,8 @@ export function AnalyzePanel() {
         model_output: modelOutput || undefined
       });
       setResult(res);
-    } catch (e: any) {
-      setErr(String(e?.message ?? e));
+    } catch (e: unknown) {
+      setErr(errorMessage(e));
     } finally {
       setRunning(false);
     }

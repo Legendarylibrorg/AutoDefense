@@ -135,30 +135,25 @@ function resolveWsBase(): string {
 const httpBase = resolveHttpBase();
 const wsBase = resolveWsBase();
 
-function apiRoot(): string {
-  return httpBase;
+function resolveStoredOrEnv(sessionKey: string, envValue: string | undefined): string | undefined {
+  try {
+    const stored = sessionStorage.getItem(sessionKey)?.trim();
+    if (stored) return stored;
+  } catch {
+    /* ignore */
+  }
+  return envValue?.trim() || undefined;
 }
 
 export function getResolvedApiKey(): string | undefined {
-  try {
-    const s = sessionStorage.getItem(SESSION_KEYS.apiKey)?.trim();
-    if (s) return s;
-  } catch {
-    /* ignore */
-  }
-  const fromEnv = (import.meta.env.VITE_API_KEY as string | undefined)?.trim();
-  return fromEnv || undefined;
+  return resolveStoredOrEnv(SESSION_KEYS.apiKey, import.meta.env.VITE_API_KEY as string | undefined);
 }
 
 export function getResolvedTransportKeyB64(): string | undefined {
-  try {
-    const s = sessionStorage.getItem(SESSION_KEYS.transportKeyB64)?.trim();
-    if (s) return s;
-  } catch {
-    /* ignore */
-  }
-  const fromEnv = (import.meta.env.VITE_TRANSPORT_KEY_B64 as string | undefined)?.trim();
-  return fromEnv || undefined;
+  return resolveStoredOrEnv(
+    SESSION_KEYS.transportKeyB64,
+    import.meta.env.VITE_TRANSPORT_KEY_B64 as string | undefined,
+  );
 }
 
 export function transportSealEnabled(): boolean {
@@ -168,13 +163,7 @@ export function transportSealEnabled(): boolean {
   );
 }
 
-export function credentialStatus(): {
-  hasApiKey: boolean;
-  hasTransportKey: boolean;
-  sealEnabled: boolean;
-  needsApiKey: boolean;
-  needsTransportKey: boolean;
-} {
+export function credentialStatus() {
   const sealEnabled = (import.meta.env.VITE_TRANSPORT_SEAL_ENABLED ?? "false") === "true";
   const hasApiKey = !!getResolvedApiKey();
   const hasTransportKey = !!getResolvedTransportKeyB64();
@@ -187,15 +176,11 @@ export function credentialStatus(): {
   };
 }
 
-function transportSealActive(): boolean {
-  return transportSealEnabled();
-}
-
 function authHeaders(): Record<string, string> {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
   const key = getResolvedApiKey();
-  if (key) h.Authorization = `Bearer ${key}`;
-  return h;
+  if (key) headers.Authorization = `Bearer ${key}`;
+  return headers;
 }
 
 function authGet(): RequestInit | undefined {
@@ -222,9 +207,8 @@ export class HttpError extends Error {
 export type FetchOptions = { signal?: AbortSignal };
 
 function withSignal(init: RequestInit | undefined, opts?: FetchOptions): RequestInit {
-  const base = init ?? {};
-  if (!opts?.signal) return base;
-  return { ...base, signal: opts.signal };
+  if (!opts?.signal) return init ?? {};
+  return { ...init, signal: opts.signal };
 }
 
 export async function formatHttpError(res: Response, label: string): Promise<string> {
@@ -259,44 +243,34 @@ async function readJson<T>(res: Response, label: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function fetchJson<T>(
+  path: string,
+  init: RequestInit | undefined,
+  opts?: FetchOptions,
+): Promise<T> {
+  const res = await fetch(`${httpBase}${path}`, withSignal(init, opts));
+  return readJson<T>(res, path);
+}
+
 async function getJson<T>(path: string, opts?: FetchOptions): Promise<T> {
-  const res = await fetch(`${apiRoot()}${path}`, withSignal(authGet(), opts));
-  return readJson<T>(res, `${path}`);
+  return fetchJson<T>(path, authGet(), opts);
 }
 
 async function getJsonPublic<T>(path: string, opts?: FetchOptions): Promise<T> {
-  const res = await fetch(`${apiRoot()}${path}`, withSignal(undefined, opts));
-  return readJson<T>(res, `${path}`);
+  return fetchJson<T>(path, undefined, opts);
 }
 
-async function postJson<T>(path: string, body: unknown, opts?: FetchOptions): Promise<T> {
-  const res = await fetch(
-    `${apiRoot()}${path}`,
-    withSignal(
-      {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify(body),
-      },
-      opts,
-    ),
+async function writeJson<T>(
+  method: "POST" | "PUT",
+  path: string,
+  body: unknown,
+  opts?: FetchOptions,
+): Promise<T> {
+  return fetchJson<T>(
+    path,
+    { method, headers: authHeaders(), body: JSON.stringify(body) },
+    opts,
   );
-  return readJson<T>(res, `${path}`);
-}
-
-async function putJson<T>(path: string, body: unknown, opts?: FetchOptions): Promise<T> {
-  const res = await fetch(
-    `${apiRoot()}${path}`,
-    withSignal(
-      {
-        method: "PUT",
-        headers: authHeaders(),
-        body: JSON.stringify(body),
-      },
-      opts,
-    ),
-  );
-  return readJson<T>(res, `${path}`);
 }
 
 async function sha256Hex(data: Uint8Array): Promise<string> {
@@ -380,6 +354,18 @@ async function sealJson(obj: unknown, aad: string): Promise<SealedEnvelope> {
   };
 }
 
+async function postSealedOrPlain<T>(
+  sealedPath: string,
+  plainPath: string,
+  payload: unknown,
+  aad: string,
+): Promise<T> {
+  if (transportSealEnabled()) {
+    return writeJson<T>("POST", sealedPath, { sealed: await sealJson(payload, aad) });
+  }
+  return writeJson<T>("POST", plainPath, payload);
+}
+
 export const API = {
   httpBase,
   get wsUrl() {
@@ -389,41 +375,19 @@ export const API = {
     const k = getResolvedApiKey();
     return k ? [`auth.${k}`] : undefined;
   },
-  fetchHealth(opts?: FetchOptions): Promise<HealthInfo> {
-    return getJsonPublic<HealthInfo>("/health", opts);
-  },
-  fetchEvents(opts?: FetchOptions): Promise<EventItem[]> {
-    return getJson<EventItem[]>("/events", opts);
-  },
-  fetchAlerts(opts?: FetchOptions): Promise<EventItem[]> {
-    return getJson<EventItem[]>("/alerts", opts);
-  },
-  fetchMetrics(opts?: FetchOptions): Promise<Record<string, unknown>> {
-    return getJson<Record<string, unknown>>("/metrics", opts);
-  },
-  fetchConfig(opts?: FetchOptions): Promise<RuntimeConfig> {
-    return getJson<RuntimeConfig>("/config", opts);
-  },
-  putConfig(cfg: RuntimeConfig, opts?: FetchOptions): Promise<RuntimeConfig> {
-    return putJson<RuntimeConfig>("/config", cfg, opts);
-  },
-  async scanArtifacts(artifacts: Artifact[]): Promise<ScanResponse> {
-    const sealed = transportSealActive();
-    const path = sealed ? "/scan/sealed" : "/scan";
-    const body = sealed ? { sealed: await sealJson({ artifacts }, "scan") } : { artifacts };
-    return postJson<ScanResponse>(path, body);
-  },
-  fetchKernelStatus(opts?: FetchOptions): Promise<KernelStatus> {
-    return getJson<KernelStatus>("/kernel/status", opts);
-  },
-  async analyzeInput(req: {
+  fetchHealth: (opts?: FetchOptions) => getJsonPublic<HealthInfo>("/health", opts),
+  fetchEvents: (opts?: FetchOptions) => getJson<EventItem[]>("/events", opts),
+  fetchAlerts: (opts?: FetchOptions) => getJson<EventItem[]>("/alerts", opts),
+  fetchMetrics: (opts?: FetchOptions) => getJson<Record<string, unknown>>("/metrics", opts),
+  fetchConfig: (opts?: FetchOptions) => getJson<RuntimeConfig>("/config", opts),
+  putConfig: (cfg: RuntimeConfig, opts?: FetchOptions) =>
+    writeJson<RuntimeConfig>("PUT", "/config", cfg, opts),
+  scanArtifacts: (artifacts: Artifact[]) =>
+    postSealedOrPlain<ScanResponse>("/scan/sealed", "/scan", { artifacts }, "scan"),
+  fetchKernelStatus: (opts?: FetchOptions) => getJson<KernelStatus>("/kernel/status", opts),
+  analyzeInput: (req: {
     user_input: string;
     model_output?: string;
     tool_calls?: Array<Record<string, unknown>>;
-  }): Promise<AnalyzeResponse> {
-    const sealed = transportSealActive();
-    const path = sealed ? "/analyze/sealed" : "/analyze";
-    const body = sealed ? { sealed: await sealJson(req, "analyze") } : req;
-    return postJson<AnalyzeResponse>(path, body);
-  },
+  }) => postSealedOrPlain<AnalyzeResponse>("/analyze/sealed", "/analyze", req, "analyze"),
 };

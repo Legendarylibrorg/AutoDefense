@@ -15,12 +15,11 @@ export function useEventStream(maxItems: number = 500) {
 
     API.fetchEvents({ signal: controller.signal })
       .then((initial) => {
-        if (cancelled) return;
         setEvents(initial.slice(-maxItems));
         setAuthRequired(false);
       })
       .catch((err: unknown) => {
-        if (cancelled || (err instanceof DOMException && err.name === "AbortError")) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
         if (err instanceof HttpError && err.status === 401) setAuthRequired(true);
       });
 

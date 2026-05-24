@@ -10,11 +10,12 @@ import {
   YAxis,
 } from "recharts";
 import type { EventItem } from "../lib/api";
+import { decisionFromEventType } from "../lib/decisions";
 
 type Point = { t: string; risk: number };
 
 function extractRisk(e: EventItem): number | null {
-  if (!e.type.startsWith("decision.")) return null;
+  if (decisionFromEventType(e.type) === "unknown") return null;
   const risk = e.payload["risk_score"];
   const n = typeof risk === "number" ? risk : Number(risk);
   return Number.isFinite(n) ? n : null;

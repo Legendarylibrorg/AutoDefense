@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { API, type EventItem, type HealthInfo } from "../lib/api";
+import { countDecisions } from "../lib/decisions";
 import { useEventStream } from "../lib/useEventStream";
 import { AnalyzePanel } from "../components/AnalyzePanel";
 import { ArtifactScanner } from "../components/ArtifactScanner";
@@ -15,30 +16,6 @@ const RiskChart = lazy(() =>
   import("../components/RiskChart").then((m) => ({ default: m.RiskChart }))
 );
 
-function classifyAction(type: string): "allow" | "log_monitor" | "sanitize" | "block_isolate" | "unknown" {
-  if (!type.startsWith("decision.")) return "unknown";
-  const suffix = type.slice("decision.".length);
-  if (
-    suffix === "allow" ||
-    suffix === "log_monitor" ||
-    suffix === "sanitize" ||
-    suffix === "block_isolate"
-  ) {
-    return suffix;
-  }
-  return "unknown";
-}
-
-function countDecisions(events: EventItem[]) {
-  const counts: Record<string, number> = {};
-  for (const e of events) {
-    const a = classifyAction(e.type);
-    if (a === "unknown") continue;
-    counts[a] = (counts[a] ?? 0) + 1;
-  }
-  return counts;
-}
-
 export function App() {
   const { events, connected, authRequired } = useEventStream(600);
   const [alerts, setAlerts] = useState<EventItem[]>([]);
@@ -50,7 +27,6 @@ export function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-    let cancelled = false;
     const tick = async () => {
       try {
         const opts = { signal: controller.signal };
@@ -59,7 +35,6 @@ export function App() {
           API.fetchMetrics(opts),
           API.fetchHealth(opts),
         ]);
-        if (cancelled) return;
         setAlerts(a);
         setMetrics(m);
         setHealth(h);
@@ -70,7 +45,6 @@ export function App() {
     tick();
     const id = setInterval(tick, 3000);
     return () => {
-      cancelled = true;
       controller.abort();
       clearInterval(id);
     };

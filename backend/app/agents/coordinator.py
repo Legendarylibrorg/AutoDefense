@@ -14,7 +14,7 @@ class CoordinatorAgent:
     async def decide(
         self,
         *,
-        req: AnalyzeRequest,
+        req: AnalyzeRequest,  # noqa: ARG002 — reserved for future request-aware routing
         signals: list[AgentSignal],
         sanitized_input: str,
         sanitized_output: str | None,

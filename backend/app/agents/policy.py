@@ -12,7 +12,7 @@ class PolicyAgent:
 
     async def analyze(
         self,
-        req: AnalyzeRequest,
+        req: AnalyzeRequest,  # noqa: ARG002 — kept for pipeline API symmetry
         *,
         sentinel_sanitized_input: str,
         runtime_policy: dict[str, Any],

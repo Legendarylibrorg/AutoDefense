@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { API, type EventItem, type HealthInfo } from "../lib/api";
 import { useEventStream } from "../lib/useEventStream";
 import { AnalyzePanel } from "../components/AnalyzePanel";
@@ -6,10 +6,13 @@ import { ArtifactScanner } from "../components/ArtifactScanner";
 import { ConfigPanel } from "../components/ConfigPanel";
 import { EventFeed } from "../components/EventFeed";
 import { KernelHealth } from "../components/KernelHealth";
-import { RiskChart } from "../components/RiskChart";
 import { StatCard } from "../components/StatCard";
 import { ConnectionCredentials } from "../components/ConnectionCredentials";
 import { osLabel } from "../lib/platform";
+
+const RiskChart = lazy(() =>
+  import("../components/RiskChart").then((m) => ({ default: m.RiskChart }))
+);
 
 function classifyAction(type: string): "allow" | "log_monitor" | "sanitize" | "block_isolate" | "unknown" {
   if (!type.startsWith("decision.")) return "unknown";
@@ -121,7 +124,15 @@ export function App() {
         </section>
 
         <section className="lg:col-span-7">
-          <RiskChart events={events} thresholds={thresholds} />
+          <Suspense
+            fallback={
+              <div className="rounded-xl border border-white/10 bg-panel p-4 text-sm text-muted">
+                Loading risk chart…
+              </div>
+            }
+          >
+            <RiskChart events={events} thresholds={thresholds} />
+          </Suspense>
           <div className="mt-6">
             <AnalyzePanel />
           </div>

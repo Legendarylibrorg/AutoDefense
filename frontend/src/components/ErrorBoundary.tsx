@@ -1,10 +1,10 @@
-import { Component, type ReactNode } from "react";
+import { Component, Fragment, type ReactNode } from "react";
 
 type Props = { children: ReactNode };
-type State = { error: Error | null };
+type State = { error: Error | null; resetKey: number };
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  state: State = { error: null, resetKey: 0 };
 
   static getDerivedStateFromError(error: Error) {
     return { error };
@@ -21,7 +21,9 @@ export class ErrorBoundary extends Component<Props, State> {
             </pre>
             <button
               className="mt-4 rounded-lg border border-accent/40 bg-accent/20 px-4 py-2 text-sm text-text hover:bg-accent/30"
-              onClick={() => this.setState({ error: null })}
+              onClick={() =>
+                this.setState((s) => ({ error: null, resetKey: s.resetKey + 1 }))
+              }
             >
               Retry
             </button>
@@ -29,6 +31,6 @@ export class ErrorBoundary extends Component<Props, State> {
         </div>
       );
     }
-    return this.props.children;
+    return <Fragment key={this.state.resetKey}>{this.props.children}</Fragment>;
   }
 }

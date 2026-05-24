@@ -10,7 +10,11 @@ _pool: Redis | None = None
 def get_redis() -> Redis:
     global _pool
     if _pool is None:
-        _pool = Redis.from_url(settings.redis_url, decode_responses=False)
+        _pool = Redis.from_url(
+            settings.redis_url,
+            decode_responses=False,
+            socket_connect_timeout=5,
+        )
     return _pool
 
 

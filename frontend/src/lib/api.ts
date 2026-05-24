@@ -186,6 +186,16 @@ export function errorMessage(err: unknown): string {
   return String(err);
 }
 
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
 async function formatHttpError(res: Response, label: string): Promise<string> {
   let detail = `${label} failed (${res.status})`;
   try {
@@ -214,7 +224,7 @@ async function formatHttpError(res: Response, label: string): Promise<string> {
 }
 
 async function readJson<T>(res: Response, label: string): Promise<T> {
-  if (!res.ok) throw new Error(await formatHttpError(res, label));
+  if (!res.ok) throw new HttpError(await formatHttpError(res, label), res.status);
   return res.json() as Promise<T>;
 }
 

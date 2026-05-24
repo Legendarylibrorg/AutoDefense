@@ -39,7 +39,7 @@ function countDecisions(events: EventItem[]) {
 }
 
 export function App() {
-  const { events, connected } = useEventStream(600);
+  const { events, connected, authRequired } = useEventStream(600);
   const [alerts, setAlerts] = useState<EventItem[]>([]);
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [health, setHealth] = useState<HealthInfo | null>(null);
@@ -115,6 +115,15 @@ export function App() {
         </div>
       </header>
 
+      {authRequired ? (
+        <div className="mx-auto max-w-7xl px-6 pb-2">
+          <div className="rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-warn">
+            Authentication required — paste your API key (and transport key if sealed transport is on) under{" "}
+            <strong>API session keys</strong>, then save and reload.
+          </div>
+        </div>
+      ) : null}
+
       <main className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-6 pb-10 lg:grid-cols-12">
         <section className="grid grid-cols-1 gap-4 lg:col-span-12 lg:grid-cols-4">
           <StatCard title="Recent events" value={events.length} hint="Redis stream tail" />
@@ -159,7 +168,7 @@ export function App() {
         </section>
 
         <section className="lg:col-span-5">
-          <KernelHealth />
+          <KernelHealth health={health} />
           <div className="mt-6">
             <EventFeed events={events} />
           </div>

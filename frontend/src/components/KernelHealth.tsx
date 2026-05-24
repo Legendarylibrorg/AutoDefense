@@ -153,31 +153,30 @@ function ScanResultView({ status }: { status: KernelStatus }) {
   );
 }
 
-export function KernelHealth() {
-  const [health, setHealth] = useState<HealthInfo | null>(null);
+export function KernelHealth(props: { health?: HealthInfo | null }) {
   const [status, setStatus] = useState<KernelStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
       try {
-        const [h, s] = await Promise.all([API.fetchHealth(), API.fetchKernelStatus()]);
-        if (!cancelled) {
-          setHealth(h);
-          setStatus(s);
-        }
+        const s = await API.fetchKernelStatus();
+        if (!cancelled) setStatus(s);
       } catch {
         // silent — will retry
       }
     };
     tick();
     const id = setInterval(tick, 10_000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   if (status?.scanned) {
     return <ScanResultView status={status} />;
   }
 
-  return <NoScanView health={health} />;
+  return <NoScanView health={props.health ?? null} />;
 }

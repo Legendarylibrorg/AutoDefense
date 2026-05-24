@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { API, type EventItem } from "./api";
+import { API, HttpError, type EventItem } from "./api";
 
 export function useEventStream(maxItems: number = 500) {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [connected, setConnected] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const retriesRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -15,8 +16,12 @@ export function useEventStream(maxItems: number = 500) {
       .then((initial) => {
         if (cancelled) return;
         setEvents(initial.slice(-maxItems));
+        setAuthRequired(false);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof HttpError && err.status === 401) setAuthRequired(true);
+      });
 
     function connect() {
       if (cancelled) return;
@@ -28,8 +33,9 @@ export function useEventStream(maxItems: number = 500) {
         retriesRef.current = 0;
       };
 
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         setConnected(false);
+        if (ev.code === 1008) setAuthRequired(true);
         if (!cancelled) {
           const delay = Math.min(1000 * 2 ** retriesRef.current, 30_000);
           retriesRef.current += 1;
@@ -68,5 +74,5 @@ export function useEventStream(maxItems: number = 500) {
     };
   }, [maxItems]);
 
-  return { events, connected };
+  return { events, connected, authRequired };
 }

@@ -27,9 +27,14 @@ import struct
 import sys
 import time
 from datetime import datetime, timezone
+from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from urllib.request import Request, urlopen
+
+# Cap filesystem walks so scans finish on large trees (e.g. CI runner /home caches).
+_FS_WALK_MAX_DEPTH = 6
+_FS_WALK_MAX_FILES = 25_000
 
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
@@ -39,6 +44,56 @@ from scanners.finding import finding  # noqa: E402
 # ---------------------------------------------------------------------------
 # Rootkit detection
 # ---------------------------------------------------------------------------
+
+def _iter_files(
+    root: Path,
+    *,
+    max_depth: int = _FS_WALK_MAX_DEPTH,
+    max_files: int = _FS_WALK_MAX_FILES,
+) -> Iterator[Path]:
+    """Yield files under root with depth and count limits."""
+    queue: deque[tuple[Path, int]] = deque([(root, 0)])
+    seen = 0
+    while queue:
+        dir_path, depth = queue.popleft()
+        if depth > max_depth:
+            continue
+        try:
+            with os.scandir(dir_path) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_symlink():
+                            continue
+                        if entry.is_dir(follow_symlinks=False):
+                            queue.append((Path(entry.path), depth + 1))
+                        elif entry.is_file(follow_symlinks=False):
+                            yield Path(entry.path)
+                            seen += 1
+                            if seen >= max_files:
+                                return
+                    except OSError:
+                        pass
+        except (PermissionError, OSError):
+            pass
+
+
+def _file_sha256(path: Path, *, max_bytes: int = 64 * 1024 * 1024) -> str | None:
+    """Return SHA-256 hex digest, or None if the file is unreadable or too large."""
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None
+    if size > max_bytes:
+        return None
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            while chunk := handle.read(1 << 20):
+                digest.update(chunk)
+    except OSError:
+        return None
+    return digest.hexdigest()
+
 
 KNOWN_ROOTKIT_PATHS = [
     "/dev/.udev.d", "/dev/.udevdb", "/dev/.udev", "/dev/.lp",
@@ -217,9 +272,7 @@ def check_tmp_executables() -> list[dict[str, Any]]:
         if not p.exists():
             continue
         try:
-            for f in p.rglob("*"):
-                if not f.is_file():
-                    continue
+            for f in _iter_files(p):
                 try:
                     st = f.stat()
                     if st.st_mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
@@ -249,9 +302,7 @@ def check_setuid_binaries() -> list[dict[str, Any]]:
         if not root.exists():
             continue
         try:
-            for f in root.rglob("*"):
-                if not f.is_file():
-                    continue
+            for f in _iter_files(root):
                 try:
                     st = f.stat()
                     if st.st_mode & (stat.S_ISUID | stat.S_ISGID):
@@ -417,13 +468,15 @@ def check_boot_integrity() -> list[dict[str, Any]]:
             if not any(f.name.startswith(p) for p in ("vmlinuz", "initrd", "initramfs", "System.map")):
                 continue
             try:
-                data = f.read_bytes()
-                digest = hashlib.sha256(data).hexdigest()
+                st = f.stat()
+                digest = _file_sha256(f)
+                if digest is None:
+                    continue
                 results.append(finding(
                     "integrity", "info",
                     f"Boot file hash: {f.name}",
                     f"SHA-256: {digest}",
-                    {"file": str(f), "sha256": digest, "size": len(data)},
+                    {"file": str(f), "sha256": digest, "size": st.st_size},
                 ))
             except (PermissionError, OSError):
                 pass
@@ -595,9 +648,7 @@ def check_pcap_files() -> list[dict[str, Any]]:
         if not p.exists():
             continue
         try:
-            for f in p.rglob("*"):
-                if not f.is_file():
-                    continue
+            for f in _iter_files(p):
                 if f.suffix.lower() in PCAP_EXTENSIONS:
                     try:
                         st = f.stat()

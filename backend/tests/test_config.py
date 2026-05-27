@@ -6,11 +6,14 @@ import os
 import pytest
 from fakeredis.aioredis import FakeRedis
 
+import json
+
 from app.core.config_store import ConfigStore
+from app.core.crypto import CryptoManager
 from app.settings import settings
 
 
-async def test_runtime_config_survives_v2_encrypted_roundtrip(monkeypatch: pytest.MonkeyPatch):
+async def test_runtime_config_survives_v3_encrypted_roundtrip(monkeypatch: pytest.MonkeyPatch):
     key_b64 = base64.b64encode(os.urandom(32)).decode()
     monkeypatch.setattr(settings, "data_encryption_enabled", True)
     monkeypatch.setattr(settings, "data_key_b64", key_b64)
@@ -23,6 +26,40 @@ async def test_runtime_config_survives_v2_encrypted_roundtrip(monkeypatch: pytes
 
     loaded = await store.load()
     assert loaded.risk_allow_max == 77
+
+
+async def test_runtime_config_decrypt_failure_raises(monkeypatch: pytest.MonkeyPatch):
+    key_b64 = base64.b64encode(os.urandom(32)).decode()
+    wrong_b64 = base64.b64encode(os.urandom(32)).decode()
+    monkeypatch.setattr(settings, "data_encryption_enabled", True)
+    monkeypatch.setattr(settings, "data_key_b64", key_b64)
+
+    redis = FakeRedis()
+    store = ConfigStore(redis)
+    cfg = store.defaults()
+    await store.save(cfg)
+
+    monkeypatch.setattr(settings, "data_key_b64", wrong_b64)
+    store2 = ConfigStore(redis)
+    with pytest.raises(RuntimeError, match="decrypt"):
+        await store2.load()
+
+
+async def test_runtime_config_rejects_plaintext_when_encryption_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    key_b64 = base64.b64encode(os.urandom(32)).decode()
+    monkeypatch.setattr(settings, "data_encryption_enabled", True)
+    monkeypatch.setattr(settings, "data_key_b64", key_b64)
+
+    redis = FakeRedis()
+    await redis.set(
+        ConfigStore.KEY,
+        json.dumps({"v": 1, "alg": "none", "pt": {"version": 1}}),
+    )
+    store = ConfigStore(redis)
+    with pytest.raises(RuntimeError, match="decrypt"):
+        await store.load()
 
 
 async def test_get_config(client):

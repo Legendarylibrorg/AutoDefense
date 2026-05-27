@@ -20,8 +20,7 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Double-layer transport encryption              │  ← Layer 1: Wire security
-│  (2× AES-256-GCM + HMAC-SHA256 + SHA-256)      │
+│  Sealed transport (AES-256-GCM + HKDF)           │  ← Layer 1: Wire security
 ├─────────────────────────────────────────────────┤
 │  API key authentication (constant-time)         │  ← Layer 2: AuthN
 ├─────────────────────────────────────────────────┤
@@ -43,8 +42,7 @@
 ├─────────────────────────────────────────────────┤
 │  Forensics (encrypted audit trail)               │  ← Layer 10: Accountability
 ├─────────────────────────────────────────────────┤
-│  Double-layer at-rest encryption in Redis        │  ← Layer 11: Data protection
-│  (2× AES-256-GCM + HMAC-SHA256 + SHA-256)       │
+│  At-rest encryption in Redis (AES-256-GCM)       │  ← Layer 11: Data protection
 ├─────────────────────────────────────────────────┤
 │  Host scanners (kernel/network/integrity)        │  ← Layer 12: Host defense
 └─────────────────────────────────────────────────┘
@@ -52,65 +50,54 @@
 
 ## Encryption
 
-### Double-layer AES-256-GCM (v2 envelope)
+### AES-256-GCM (v3 envelope)
 
-Both at-rest and transport encryption use a **double-layer** design. From a single 32-byte master key, three independent subkeys are derived via **HKDF-SHA256** ([RFC 5869](https://datatracker.ietf.org/doc/html/rfc5869)):
+At-rest and sealed transport use **one 32-byte master key** per domain. New payloads use **single-layer AES-256-GCM** with an HKDF-derived AES key:
 
-| Subkey | HKDF info parameter | Purpose |
-|--------|---------------------|---------|
-| `key_inner` | `autodefense-inner-v2` | Inner AES-256-GCM encryption |
-| `key_outer` | `autodefense-outer-v2` | Outer AES-256-GCM encryption |
-| `key_hmac` | `autodefense-hmac-v2` | HMAC-SHA256 integrity binding |
+| Material | HKDF `info` (UTF-8) | Purpose |
+|----------|---------------------|---------|
+| `key_aes` | `autodefense-aes-v3` | AES-256-GCM encrypt/decrypt |
 
-#### Encrypt path
+#### Encrypt path (v3)
 
-1. Canonical JSON serialization (`sort_keys=True`, compact separators)
-2. **SHA-256** hash of the plaintext bytes
-3. **HMAC-SHA256**(key_hmac, plaintext) — keyed integrity binding
-4. **Inner AES-256-GCM**(key_inner, random 12-byte nonce, plaintext, AAD) — Layer 1 encryption
-5. **Outer AES-256-GCM**(key_outer, random 12-byte nonce, inner_ciphertext, AAD) — Layer 2 encryption
+1. Canonical JSON serialization on the backend (`sort_keys=True`, compact separators); browser sealed transport uses `JSON.stringify` of the request object.
+2. **AES-256-GCM**(key_aes, random 12-byte nonce, plaintext, AAD) — confidentiality and authenticity (AEAD).
 
-#### Decrypt path
+#### Decrypt path (v3)
 
-1. Outer AES-256-GCM decrypt (key_outer) — verifies outer auth tag
-2. Inner AES-256-GCM decrypt (key_inner) — verifies inner auth tag
-3. HMAC-SHA256 verification (key_hmac) — constant-time comparison
-4. SHA-256 hash verification — ensures bit-perfect plaintext recovery
+1. AES-256-GCM decrypt — GCM authentication tag must verify.
+2. JSON parse of plaintext; any failure returns empty (transport) or raises (at-rest stores).
 
-Any single check failure returns an empty result. Decryption applies **four independent checks** (outer GCM authentication tag, inner GCM tag, HMAC-SHA256 over plaintext, SHA-256 over plaintext). Those are **not** four HKDF subkeys — there are **exactly three** derived keys; the fourth item is a hash of the plaintext for bit-exact recovery detection.
-
-#### v2 envelope format
+#### v3 envelope format
 
 ```json
 {
-  "v": 2,
-  "alg": "AES-256-GCM-DOUBLE",
-  "inner_nonce_b64": "base64(12 random bytes)",
-  "outer_nonce_b64": "base64(12 random bytes)",
-  "ct_b64": "base64(double-encrypted ciphertext)",
-  "sha256": "hex(SHA-256 of plaintext)",
-  "hmac": "hex(HMAC-SHA256 of plaintext)"
+  "v": 3,
+  "alg": "AES-256-GCM",
+  "nonce_b64": "base64(12 random bytes)",
+  "ct_b64": "base64(ciphertext + GCM tag)"
 }
 ```
 
 #### Backward compatibility
 
-v1 single-layer envelopes (`alg: "AES-256-GCM"`) are still accepted for decryption. All new writes use v2. The `alg: "none"` downgrade is rejected when encryption is enabled.
+- **v2** double-layer envelopes (`alg: "AES-256-GCM-DOUBLE"`) and **v1** single-layer envelopes (`v: 1`, raw master key) remain **decrypt-only** for migration.
+- All **new writes** use v3.
+- `alg: "none"` downgrade is rejected when encryption is enabled (at-rest loads fail loudly).
 
 ### HKDF parameters (backend and browser)
 
-Each **32-byte base64-decoded master** (`AUTODEFENSE_DATA_KEY_B64` or `AUTODEFENSE_TRANSPORT_KEY_B64`) feeds **three** separate HKDF-SHA256 derivations — **three subkeys total**, not four:
+- **Backend** (`app/core/crypto.py`): `cryptography` HKDF-SHA256, output length 32, **`salt=None`** (digest-sized zero salt in extract).
+- **Dashboard** (`frontend/src/lib/api.ts`): Web Crypto HKDF-SHA256, **`salt` = 32 zero bytes**, **`info` = `autodefense-aes-v3`** — must stay aligned with the backend.
 
-| # | Material | HKDF `info` (UTF-8 bytes) | Used for |
-|---|----------|---------------------------|----------|
-| 1 | `key_inner` | `autodefense-inner-v2` | Inner AES-256-GCM |
-| 2 | `key_outer` | `autodefense-outer-v2` | Outer AES-256-GCM |
-| 3 | `key_hmac` | `autodefense-hmac-v2` | HMAC-SHA256 over canonical plaintext bytes |
+Third-party sealed-transport clients should use the v3 layout and HKDF label above.
 
-- **Backend** (`app/core/crypto.py`): `cryptography.hazmat.primitives.kdf.hkdf.HKDF` with SHA-256, **output length 32** per call, **`salt=None`**. For this library, `salt=None` uses a **digest-sized all-zero salt** in the extract step (32 zero bytes for SHA-256), per RFC 5869-style fixed salt when none is supplied.
-- **Bundled dashboard** (`frontend/src/lib/api.ts`): Web Crypto **HKDF** with SHA-256, **`salt` = 32 zero bytes** (`new Uint8Array(32)`), same three **`info`** strings — **must stay aligned** with the backend or `/analyze/sealed` and `/scan/sealed` will fail to decrypt.
+### Key validation and failure modes
 
-Third-party clients implementing sealed transport should mirror this triple derivation and the v2 envelope layout below; do **not** introduce a fourth HKDF output unless the protocol version is bumped consistently across backend, tests, and frontend.
+- Malformed `AUTODEFENSE_DATA_KEY_B64` or `AUTODEFENSE_TRANSPORT_KEY_B64` (invalid base64 or not 32 bytes after decode) **prevents startup**.
+- `AUTODEFENSE_SCANNER_HMAC_KEY`, when set, must be at least **16 characters**.
+- At-rest decrypt failures (wrong key, tampering, `alg: "none"` while encryption is on) raise errors instead of silently resetting config/rules to defaults.
+- Sealed transport decrypt failures return HTTP **400** (unchanged).
 
 ### Key management
 
@@ -119,10 +106,11 @@ Third-party clients implementing sealed transport should mirror this triple deri
 | At-rest | Config, forensics, dynamic rules, kernel status in Redis | `AUTODEFENSE_DATA_KEY_B64` |
 | Sealed transport | Client-to-backend request payloads | `AUTODEFENSE_TRANSPORT_KEY_B64` |
 
-- Each env var holds **one** master; **three** subkeys are always derived from it as in the table above (same algorithm for data and transport managers).
-- Keys are base64-encoded 32-byte (256-bit) values
+- Each env var holds **one** 256-bit master; v3 derives a single AES key via HKDF (same algorithm for data and transport managers).
+- Keys are base64-encoded 32-byte values. Invalid keys fail at startup.
 - Backend uses the audited Python `cryptography` library (`AESGCM`, `HKDF`)
-- Frontend uses the Web Crypto API (`AES-GCM`, `HKDF`, `HMAC`) — browser-native, no JS crypto libraries
+- Frontend uses the Web Crypto API (`AES-GCM`, `HKDF`) — browser-native, no JS crypto libraries
+- **Do not embed `VITE_TRANSPORT_KEY_B64` in production frontend builds** — anyone with the bundle can forge sealed payloads. Prefer session-only entry in the dashboard; rely on TLS + API key as the primary transport trust boundary.
 - AAD (Additional Authenticated Data) binds ciphertext to its context (e.g., `"analyze"`, `"scan"`, `"runtime_config"`)
 - If `AUTODEFENSE_DATA_KEY_B64` is empty **and** `AUTODEFENSE_ENVIRONMENT` is `local`, the backend generates an ephemeral at-rest key (data lost on restart). Outside `local`, an empty data key with encryption enabled prevents startup.
 - If `AUTODEFENSE_TRANSPORT_KEY_B64` is empty, sealed endpoints return 400
@@ -135,7 +123,7 @@ openssl rand -base64 32
 
 ### Scanner payload integrity
 
-Host scanners (Linux, macOS, Windows) sign their POST payloads with HMAC-SHA256 using `AUTODEFENSE_SCANNER_HMAC_KEY`. The backend verifies the signature on the raw request body before processing when that key is configured. Outside `local`, `POST /scan/kernel` is rejected if the scanner HMAC key is unset so unsigned ingest cannot be mistaken for a verified scan.
+Host scanners (Linux, macOS, Windows) sign their POST payloads with HMAC-SHA256 using `AUTODEFENSE_SCANNER_HMAC_KEY` (minimum **16 characters** when set; use `openssl rand -hex 32` in production). The backend verifies the signature on the raw request body before processing when that key is configured. Outside `local`, `POST /scan/kernel` is rejected if the scanner HMAC key is unset so unsigned ingest cannot be mistaken for a verified scan.
 
 ## Authentication
 
@@ -190,7 +178,7 @@ The `ArtifactAgent` defends against SSRF at three levels:
 | 4 | Agentic Supply Chain Vulns | Out of scope | Build-time concern |
 | 5 | Unexpected Code Execution | Defended | eval/exec/subprocess/os.system/child_process/Runtime.exec detection in tool calls |
 | 6 | Memory and Context Poisoning | Defended | Delimiter injection detection (`[system]`, `<|system|>`, `---system---`), role-line redaction |
-| 7 | Insecure Inter-Agent Comms | Defended | Double-layer AES-256-GCM encryption at rest and in transit with HMAC integrity binding |
+| 7 | Insecure Inter-Agent Comms | Defended | AES-256-GCM (HKDF-derived keys) at rest and sealed transport |
 | 8 | Cascading Failures | Defended | React ErrorBoundary, graceful Redis shutdown (lifespan), health endpoint, WebSocket auto-reconnect with exponential backoff |
 | 9 | Human-Agent Trust Exploitation | Defended | Phishing pattern detection, authority impersonation detection in input |
 | 10 | Rogue Agents | Defended | Linux kernel rootkit + zero-day detection layer |

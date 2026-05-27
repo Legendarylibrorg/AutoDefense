@@ -8,7 +8,7 @@ from typing import Any
 
 from redis.asyncio import Redis
 
-from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
+from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager, DecryptionError
 from app.core.regex_safety import regex_safety_error
 from app.settings import settings
 
@@ -98,7 +98,10 @@ class ConfigStore:
         data = json.loads(raw)
         # encrypted envelope support
         if isinstance(data, dict) and data.get("alg") in STORE_ENVELOPE_ALGS:
-            data = self.crypto.decrypt_json(data, aad=b"runtime_config")
+            try:
+                data = self.crypto.decrypt_json_required(data, aad=b"runtime_config")
+            except DecryptionError as exc:
+                raise RuntimeError("Failed to decrypt runtime config from Redis") from exc
         d = self.defaults()
         return RuntimeConfig(
             version=int(data.get("version", d.version)),

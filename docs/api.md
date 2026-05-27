@@ -63,27 +63,24 @@ curl -sS http://localhost:8000/analyze \
 
 ### POST /analyze/sealed
 
-Same as `/analyze` but with a double-layer AES-256-GCM encrypted payload. Requires `AUTODEFENSE_TRANSPORT_KEY_B64` to be configured.
+Same as `/analyze` but with an AES-256-GCM encrypted payload. Requires `AUTODEFENSE_TRANSPORT_KEY_B64` to be configured.
 
-**Request body (v2 envelope):**
+**Request body (v3 envelope):**
 
 ```json
 {
   "sealed": {
-    "v": 2,
-    "alg": "AES-256-GCM-DOUBLE",
-    "inner_nonce_b64": "base64(12-byte nonce for inner layer)",
-    "outer_nonce_b64": "base64(12-byte nonce for outer layer)",
-    "ct_b64": "base64(double-encrypted ciphertext)",
-    "sha256": "hex(SHA-256 of plaintext)",
-    "hmac": "hex(HMAC-SHA256 of plaintext)"
+    "v": 3,
+    "alg": "AES-256-GCM",
+    "nonce_b64": "base64(12-byte nonce)",
+    "ct_b64": "base64(ciphertext + GCM tag)"
   }
 }
 ```
 
-The **three** subkeys (inner AES, outer AES, HMAC) are derived from the master transport key with **three** HKDF-SHA256 calls (distinct `info` strings; **no fourth** HKDF output). Backend and bundled dashboard use aligned HKDF salt handling — see [Security → HKDF parameters](security.md#hkdf-parameters-backend-and-browser).
+The AES key is derived from the master transport key with HKDF-SHA256 (`info`: `autodefense-aes-v3`). See [Security → Encryption](security.md#encryption).
 
-Legacy v1 single-layer envelopes (`alg: "AES-256-GCM"`) are still accepted for backward compatibility.
+Legacy v2 and v1 envelopes remain decryptable for migration.
 
 ### POST /scan
 
@@ -108,7 +105,7 @@ Artifact-only preflight scan (no full pipeline).
 
 ### POST /scan/sealed
 
-Double-layer encrypted version of `/scan`. Same v2 envelope format as `/analyze/sealed` — **three** HKDF-derived subkeys from the transport master; see [Security](security.md#hkdf-parameters-backend-and-browser).
+Encrypted version of `/scan`. Same v3 envelope format as `/analyze/sealed`; see [Security](security.md#encryption).
 
 ### POST /scan/kernel
 

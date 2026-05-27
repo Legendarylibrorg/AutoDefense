@@ -9,7 +9,10 @@ from app.settings import settings
 def transport_crypto() -> CryptoManager:
     if not settings.transport_seal_enabled:
         return CryptoManager(None)
-    return CryptoManager(settings.transport_key_b64)
+    return CryptoManager(
+        settings.transport_key_b64,
+        require_key=bool(settings.transport_key_b64),
+    )
 
 
 def unseal_to_dict(env: dict[str, Any], *, aad: bytes) -> dict[str, Any]:

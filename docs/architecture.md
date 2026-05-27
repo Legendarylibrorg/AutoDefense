@@ -121,25 +121,19 @@ The frontend consumes events via:
 
 ```mermaid
 flowchart TB
-    subgraph Encryption[Double-Layer Encryption]
+    subgraph Encryption[AES-256-GCM v3]
         MK[Master Key 32 bytes] --> HKDF[HKDF-SHA256]
-        HKDF --> IK[key_inner<br>Inner AES-256-GCM]
-        HKDF --> OK[key_outer<br>Outer AES-256-GCM]
-        HKDF --> HK[key_hmac<br>HMAC-SHA256]
-        IK --> Seal[Sealed Endpoints]
-        OK --> Seal
-        HK --> Seal
-        IK --> Store[Redis Storage]
-        OK --> Store
-        HK --> Store
+        HKDF --> AES[key_aes<br>AES-256-GCM]
+        AES --> Seal[Sealed Endpoints]
+        AES --> Store[Redis Storage]
     end
 
     subgraph Storage[Redis]
-        Config[Runtime Config<br>v2 encrypted]
-        Rules[Dynamic Rules<br>v2 encrypted]
-        Forensic[Forensic Records<br>v2 encrypted]
+        Config[Runtime Config<br>encrypted]
+        Rules[Dynamic Rules<br>encrypted]
+        Forensic[Forensic Records<br>encrypted]
         Events[Event Stream]
-        KernelStatus[Kernel Status<br>v2 encrypted]
+        KernelStatus[Kernel Status<br>encrypted]
     end
 
     subgraph Pipeline
@@ -148,13 +142,13 @@ flowchart TB
         Response --> Rules
     end
 
-    Client -->|double-sealed payload| Seal
+    Client -->|sealed payload| Seal
     Seal --> Pipeline
     Pipeline --> Events
     Events --> Dashboard
 ```
 
-Each encrypted blob uses **one** random-data master per domain (transport vs at-rest) configured in env. From that master, **three** HKDF-SHA256 outputs (`key_inner`, `key_outer`, `key_hmac`) are produced — **no fourth HKDF subkey**. On decrypt, four **verification steps** run (outer GCM tag, inner GCM tag, HMAC, SHA-256 of plaintext). Details: [Security](security.md#encryption).
+Each encrypted blob uses **one** 256-bit master per domain (transport vs at-rest). v3 derives `key_aes` via HKDF (`autodefense-aes-v3`) for single-layer AES-256-GCM. Details: [Security](security.md#encryption).
 
 ## Technology stack
 
@@ -162,7 +156,7 @@ Each encrypted blob uses **one** random-data master per domain (transport vs at-
 |-------|-----------|
 | Backend | Python 3.11, FastAPI, Pydantic, uvicorn |
 | Event bus | Redis 7 Streams |
-| Encryption | Python `cryptography` (AESGCM, HKDF), Web Crypto API (AES-GCM, HKDF, HMAC) |
+| Encryption | Python `cryptography` (AESGCM, HKDF), Web Crypto API (AES-GCM, HKDF) |
 | Frontend | React 19, TypeScript, Vite 8, Tailwind CSS, Recharts |
 | Serving | nginx (frontend), uvicorn (backend) |
 | Containerization | Docker, Docker Compose |

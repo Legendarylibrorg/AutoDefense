@@ -73,7 +73,7 @@ async def test_health_is_public(authed_app):
 def test_production_requires_api_key(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "environment", "production")
     monkeypatch.setattr(settings, "api_key", None)
-    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret-key-ok")
     monkeypatch.setattr(settings, "data_encryption_enabled", False)
     with pytest.raises(RuntimeError, match="AUTODEFENSE_API_KEY"):
         create_app()
@@ -91,7 +91,7 @@ def test_production_requires_scanner_hmac(monkeypatch: pytest.MonkeyPatch):
 def test_development_requires_api_key(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "environment", "development")
     monkeypatch.setattr(settings, "api_key", None)
-    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret-key-ok")
     monkeypatch.setattr(settings, "data_encryption_enabled", False)
     with pytest.raises(RuntimeError, match="AUTODEFENSE_API_KEY"):
         create_app()
@@ -100,7 +100,7 @@ def test_development_requires_api_key(monkeypatch: pytest.MonkeyPatch):
 def test_staging_requires_data_key_when_encryption_on(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "environment", "staging")
     monkeypatch.setattr(settings, "api_key", "api-secret")
-    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret-key-ok")
     monkeypatch.setattr(settings, "data_encryption_enabled", True)
     monkeypatch.setattr(settings, "data_key_b64", None)
     with pytest.raises(RuntimeError, match="AUTODEFENSE_DATA_KEY_B64"):
@@ -110,7 +110,7 @@ def test_staging_requires_data_key_when_encryption_on(monkeypatch: pytest.Monkey
 async def test_openapi_not_exposed_outside_local(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "environment", "staging")
     monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
-    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret-key-ok")
     monkeypatch.setattr(settings, "data_encryption_enabled", False)
     app = create_app()
     fake = FakeRedis()
@@ -128,7 +128,7 @@ async def test_openapi_not_exposed_outside_local(monkeypatch: pytest.MonkeyPatch
 async def test_health_minimal_outside_local(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "environment", "staging")
     monkeypatch.setattr(settings, "api_key", TEST_API_KEY)
-    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret")
+    monkeypatch.setattr(settings, "scanner_hmac_key", "scanner-secret-key-ok")
     monkeypatch.setattr(settings, "data_encryption_enabled", False)
     app = create_app()
     fake = FakeRedis()

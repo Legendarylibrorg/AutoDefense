@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.router import api_router
+from app.core.crypto import CryptoKeyError, decode_master_key, validate_scanner_hmac_key
 from app.core.logging import configure_logging
 from app.core.redis_client import close_pool, get_redis
 from app.settings import settings
@@ -90,6 +91,15 @@ def _enforce_runtime_secrets() -> None:
             "AUTODEFENSE_DATA_KEY_B64 is required when AUTODEFENSE_DATA_ENCRYPTION_ENABLED is true "
             "and AUTODEFENSE_ENVIRONMENT is not local."
         )
+
+    try:
+        if settings.data_encryption_enabled and settings.data_key_b64:
+            decode_master_key(settings.data_key_b64)
+        if settings.transport_key_b64:
+            decode_master_key(settings.transport_key_b64)
+        validate_scanner_hmac_key(settings.scanner_hmac_key)
+    except CryptoKeyError as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------

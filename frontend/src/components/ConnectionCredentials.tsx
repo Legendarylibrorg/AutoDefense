@@ -54,6 +54,11 @@ export function ConnectionCredentials() {
         Stored only in this browser tab (sessionStorage). Leave blank to use build-time Vite env values for
         local development.
       </p>
+      {creds.transportKeyInBuildWarning ? (
+        <p className="mt-2 max-w-sm rounded border border-warn/40 bg-warn/10 px-2 py-1.5 text-warn">
+          {creds.transportKeyInBuildWarning}
+        </p>
+      ) : null}
       <label className="mt-2 block text-muted">
         API key
         <input

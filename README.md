@@ -2,7 +2,7 @@
 
 Autonomous, event-driven, multi-agent defense system that monitors AI inputs, outputs, and tool calls in real time — scoring risk, responding autonomously, self-healing with dynamic guardrails, and streaming full observability to a React dashboard.
 
-**Double-layer AES-256-GCM encryption by default** — for each 32-byte master key (transport + at-rest), the code derives **exactly three** HKDF-SHA256 subkeys (inner AES, outer AES, HMAC); each payload is verified with **four** checks on decrypt (outer GCM tag, inner GCM tag, HMAC, SHA-256 of plaintext). Details: [Security → Encryption](docs/security.md#encryption). Keys can be auto-generated on first run via `scripts/start.sh`.
+**AES-256-GCM encryption by default** — each 32-byte master key (transport + at-rest) derives one HKDF-SHA256 AES key (`autodefense-aes-v3`) for single-layer AEAD. Legacy v2/v1 envelopes remain decryptable. Details: [Security → Encryption](docs/security.md#encryption). Keys can be auto-generated on first run via `scripts/start.sh`.
 
 This software uses **pattern-based heuristics and configurable rules**. It **does not guarantee** detection of every attack, elimination of false positives, or fitness for any particular compliance regime or threat model. Evaluate against your own requirements.
 
@@ -171,7 +171,7 @@ The codebase has been refined through **multiple internal security-focused revie
 
 | Area | Hardening |
 |------|-----------|
-| **Encryption** | Double-layer AES-256-GCM: **3** HKDF-SHA256 subkeys per master (inner AES, outer AES, HMAC); decrypt runs **4** checks (both GCM tags + HMAC + SHA-256 of plaintext) |
+| **Encryption** | AES-256-GCM (v3): one HKDF-derived key per 32-byte master; legacy v2/v1 decrypt supported |
 | **Authentication** | Constant-time API key comparison (HMAC), WebSocket auth via `Sec-WebSocket-Protocol` header (no query param leakage) |
 | **Input validation** | NFKC Unicode normalization, zero-width character stripping, ReDoS guards on all dynamic regexes (config + rules), Pydantic field constraints |
 | **SSRF** | Regex patterns + numeric IP resolution (hex/octal/decimal) + non-blocking async DNS with 2s timeout |

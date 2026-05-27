@@ -26,7 +26,13 @@ class ConfigDTO(BaseModel):
 @router.get("/config", response_model=ConfigDTO)
 async def get_config(redis=Depends(get_redis)) -> Any:
     store = ConfigStore(redis)
-    cfg = await store.load()
+    try:
+        cfg = await store.load()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Stored configuration could not be decrypted (check AUTODEFENSE_DATA_KEY_B64).",
+        ) from exc
     return ConfigDTO(**cfg.__dict__)
 
 
@@ -40,7 +46,13 @@ async def put_config(body: ConfigDTO, redis=Depends(get_redis)) -> Any:
         raise HTTPException(status_code=400, detail={"errors": errs})
 
     # bump version deterministically
-    current = await store.load()
+    try:
+        current = await store.load()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Stored configuration could not be decrypted (check AUTODEFENSE_DATA_KEY_B64).",
+        ) from exc
     incoming.version = max(current.version + 1, incoming.version)
     await store.save(incoming)
 

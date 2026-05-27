@@ -35,8 +35,8 @@ cp .env.example .env
 |----------|------|
 | `AUTODEFENSE_API_KEY` | Bearer token for REST (and WebSocket `Sec-WebSocket-Protocol: auth.<key>`) |
 | `AUTODEFENSE_SCANNER_HMAC_KEY` | HMAC over raw JSON for host scanners posting to `/scan/kernel` |
-| `AUTODEFENSE_DATA_KEY_B64` | **32-byte** master (base64) for **at-rest** Redis payloads — see [Encryption](security.md#encryption) (**three** HKDF subkeys) |
-| `AUTODEFENSE_TRANSPORT_KEY_B64` | **32-byte** master (base64) for **sealed** HTTP bodies — same three-subkey scheme; must match the dashboard if you use sealed routes |
+| `AUTODEFENSE_DATA_KEY_B64` | **32-byte** master (base64) for **at-rest** Redis payloads — see [Encryption](security.md#encryption) |
+| `AUTODEFENSE_TRANSPORT_KEY_B64` | **32-byte** master (base64) for **sealed** HTTP bodies; must match the dashboard if you use sealed routes |
 | `AUTODEFENSE_REDIS_PASSWORD` | Redis ACL password (Compose wires this into Redis and the backend) |
 
 Leave values empty in `.env` for a first run on **local**; the start script fills them (see below). Outside `local`, empty API / data keys cause startup to fail — see [Configuration](configuration.md).
@@ -124,7 +124,7 @@ npm ci
 npm run dev
 ```
 
-Set `VITE_BACKEND_HTTP` / `VITE_BACKEND_WS` if the API is not on localhost:8000. For sealed `/analyze` and `/scan`, align `VITE_TRANSPORT_KEY_B64` with the backend’s `AUTODEFENSE_TRANSPORT_KEY_B64` (same **32-byte** master → same **three** HKDF subkeys; see [Security](security.md#hkdf-parameters-backend-and-browser)).
+Set `VITE_BACKEND_HTTP` / `VITE_BACKEND_WS` if the API is not on localhost:8000. For sealed `/analyze` and `/scan`, align the dashboard transport key with `AUTODEFENSE_TRANSPORT_KEY_B64` (same **32-byte** master; see [Security](security.md#encryption)). Prefer session-only entry over `VITE_TRANSPORT_KEY_B64` in production.
 
 ## 6. Host scanners (optional)
 
@@ -143,7 +143,7 @@ See [Host scanners](scanners.md) for flags, HMAC signing, and backend contract.
 | Topic | Document |
 |--------|-----------|
 | All env vars | [Configuration](configuration.md) |
-| Crypto (3 subkeys, v2 envelope, AAD) | [Security → Encryption](security.md#encryption) |
+| Crypto (v3 AES-GCM, HKDF, AAD) | [Security → Encryption](security.md#encryption) |
 | API routes | [API reference](api.md) |
 | Production hardening | [Deployment](deployment.md) |
 | Architecture | [Architecture](architecture.md) |

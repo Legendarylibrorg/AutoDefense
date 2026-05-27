@@ -8,7 +8,7 @@ from typing import Any, Callable
 from redis.asyncio import Redis
 from redis.exceptions import WatchError
 
-from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager
+from app.core.crypto import STORE_ENVELOPE_ALGS, CryptoManager, DecryptionError
 from app.core.regex_safety import is_safe_regex
 from app.settings import settings
 
@@ -49,7 +49,10 @@ class RulesStore:
             raw = raw.decode("utf-8", errors="replace")
         data = json.loads(raw)
         if isinstance(data, dict) and data.get("alg") in STORE_ENVELOPE_ALGS:
-            data = self.crypto.decrypt_json(data, aad=b"dynamic_rules")
+            try:
+                data = self.crypto.decrypt_json_required(data, aad=b"dynamic_rules")
+            except DecryptionError as exc:
+                raise RuntimeError("Failed to decrypt dynamic rules from Redis") from exc
         if not isinstance(data, dict):
             data = {}
         return DynamicRules(

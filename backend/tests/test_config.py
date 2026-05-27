@@ -9,7 +9,6 @@ from fakeredis.aioredis import FakeRedis
 import json
 
 from app.core.config_store import ConfigStore
-from app.core.crypto import CryptoManager
 from app.settings import settings
 
 

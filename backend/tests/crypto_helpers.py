@@ -45,9 +45,7 @@ def transport_seal_v2(obj: dict[str, Any], *, aad: bytes) -> dict[str, Any]:
     key_outer = _derive(b"autodefense-outer-v2")
     key_hmac = _derive(b"autodefense-hmac-v2")
 
-    raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode(
-        "utf-8"
-    )
+    raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
     mac = _hmac.new(key_hmac, raw, hashlib.sha256).hexdigest()
     inner_nonce = os.urandom(12)
     inner_ct = AESGCM(key_inner).encrypt(inner_nonce, raw, aad)

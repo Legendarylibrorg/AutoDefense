@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- **Supply chain:** Bump frontend lockfile (Vite 8.0.14, Vitest 4.1.7, PostCSS/autoprefixer) and backend `uv.lock` (FastAPI 0.136.3, Uvicorn 0.48, redis-py 8.0, Starlette 1.2); Tailwind CSS remains on v3.
 - **API:** Hide OpenAPI outside `local`; redact sensitive `/health` fields in non-local environments; require API key on WebSocket connections; add security headers on HTTP responses.
 - **Docker:** Read-only root filesystem defaults where applicable; dashboard nginx CSP via `nginx.conf.template` and envsubst for connect-src.
 - **Supply chain:** Dependabot grouping tweaks; backend minimum versions for cryptography and related deps; Vite/Rolldown bump in frontend lockfile; `scripts/sync_vite_lock.py` for lockfile hygiene.

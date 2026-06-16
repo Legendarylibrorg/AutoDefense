@@ -39,9 +39,9 @@ For threat model, crypto design, and OWASP coverage notes, see [docs/security.md
 
 This repository ships **application code**, not antivirus signatures. Routine checks maintainers expect before releases:
 
-- **Frontend:** `npm ci` with the committed `package-lock.json`; `npm audit --audit-level=moderate` (also `npm run audit` and CI in `.github/workflows/frontend-ci.yml` + `supply-chain.yml`). `frontend/.npmrc` sets `audit-level=moderate` and `engine-strict=true`.
-- **Backend:** `uv sync --all-extras --frozen` from `backend/uv.lock` (Docker and CI use the same lockfile); after bumps run `uv lock` and review `uv.lock` diffs. CI runs [OSV-Scanner](https://google.github.io/osv-scanner/) on `uv.lock` and `package-lock.json`.
-- **Pull requests:** GitHub **dependency review** (v5, moderate+) and **OSV PR delta scan** on lockfiles via `.github/workflows/supply-chain.yml`. Installs use `npm ci --ignore-scripts` where lifecycle scripts are not required.
+- **Frontend:** `npm ci` with the committed `package-lock.json`; `npm audit --audit-level=moderate` (also `npm run audit` and the local quality gate in [docs/CI_LOCAL.md](docs/CI_LOCAL.md)). `frontend/.npmrc` sets `audit-level=moderate` and `engine-strict=true`.
+- **Backend:** `uv sync --all-extras --frozen` from `backend/uv.lock` (Docker and local CI use the same lockfile); after bumps run `uv lock` and review `uv.lock` diffs. Run [OSV-Scanner](https://google.github.io/osv-scanner/) on `uv.lock` and `package-lock.json` via `make ci` or `python3 scripts/run_ci_local.py --job supply-chain`.
+- **Pull requests:** Run `make ci-fast` before opening; use `make ci` when lockfiles change. Installs use `npm ci --ignore-scripts` where lifecycle scripts are not required.
 - **Heuristic review:** Scripts under `scripts/`, scanners under `kernel/`, `macos/`, `windows/`, and the optional `demo` Compose profile deserve the same scrutiny as production code (`subprocess`, `urllib`, host mounts).
 
 For authoritative malware verdicts on third-party packages, rely on OS-level scanners, Sigstore attestations where available, and your organization's software supply-chain policy — not grep alone.

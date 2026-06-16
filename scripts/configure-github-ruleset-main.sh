@@ -35,10 +35,9 @@ repo="${slug#*/}"
 case "$REQUIRE_CODEOWNERS" in 1 | true | yes) co_json=true ;; *) co_json=false ;; esac
 case "$REQUIRE_CONVERSATIONS_RESOLVED" in 1 | true | yes) rt_json=true ;; *) rt_json=false ;; esac
 
-# Single-line default so every /bin/sh passes valid JSON to jq --argjson.
-# Contexts must match each workflow job's `name:` (GitHub Actions check run name),
-# not "Workflow file title / job".
-_default_contexts='[{"context":"Python 3.11"},{"context":"Python 3.12"},{"context":"Node 20"},{"context":"Node 22"}]'
+# Optional required GitHub status checks (empty by default — CI runs locally; see docs/CI_LOCAL.md).
+# When set, each entry must match a check run `name:` on GitHub, e.g. [{"context":"My Org Gate"}].
+_default_contexts='[]'
 CONTEXTS_JSON="${CONTEXTS_JSON:-$_default_contexts}"
 
 reviews_raw="${REQUIRED_APPROVALS:-0}"
@@ -55,17 +54,8 @@ jq -n \
   --argjson codeowners "$co_json" \
   --argjson resolve_threads "$rt_json" \
   --argjson contexts "$CONTEXTS_JSON" \
-  '{
-    name: $name,
-    target: "branch",
-    enforcement: "active",
-    conditions: {
-      ref_name: {
-        include: [$branch],
-        exclude: []
-      }
-    },
-    rules: [
+  '
+    [
       { type: "deletion" },
       { type: "non_fast_forward" },
       {
@@ -78,17 +68,31 @@ jq -n \
           required_approving_review_count: $reviews,
           required_review_thread_resolution: $resolve_threads
         }
-      },
-      {
-        type: "required_status_checks",
-        parameters: {
-          strict_required_status_checks_policy: true,
-          do_not_enforce_on_create: false,
-          required_status_checks: $contexts
-        }
       }
-    ]
-  }' >"$body_file"
+    ] as $base
+    | if ($contexts | length) > 0 then
+        $base + [{
+          type: "required_status_checks",
+          parameters: {
+            strict_required_status_checks_policy: true,
+            do_not_enforce_on_create: false,
+            required_status_checks: $contexts
+          }
+        }]
+      else $base end
+    | {
+        name: $name,
+        target: "branch",
+        enforcement: "active",
+        conditions: {
+          ref_name: {
+            include: [$branch],
+            exclude: []
+          }
+        },
+        rules: .
+      }
+  ' >"$body_file"
 
 existing_id="$(gh api "repos/${owner}/${repo}/rulesets" --paginate -q ".[] | select(.name==\"${RULESET_NAME}\") | .id" | head -n1)"
 

@@ -216,6 +216,7 @@ AUTO DEFENSE/
 | Document | Contents |
 |----------|----------|
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Local dev, tests, PR expectations |
+| [Local quality gate](docs/CI_LOCAL.md) | `make ci` — backend, frontend, and supply-chain checks |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting (private / coordinated disclosure) |
 | [CHANGELOG.md](CHANGELOG.md) | Release-oriented change summary |
 | [Code of Conduct](CODE_OF_CONDUCT.md) | Community expectations |
@@ -231,7 +232,7 @@ AUTO DEFENSE/
 | [Host Scanners](docs/scanners.md) | Linux, macOS, and Windows scanner documentation |
 | [Configuration](docs/configuration.md) | All environment variables, runtime config, tuning |
 | [Deployment](docs/deployment.md) | Docker install, local dev, testing, production ops |
-| [GitHub: protect `main`](docs/maintainers/github-repository-setup.md) | Rulesets, PR-only workflow, required CI (`gh` script) |
+| [GitHub: protect `main`](docs/maintainers/github-repository-setup.md) | Rulesets, PR-only workflow, local quality gate |
 
 ## License
 

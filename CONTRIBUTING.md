@@ -14,23 +14,35 @@ Do **not** open a public issue for unfixed security bugs. Use [SECURITY.md](SECU
 
 ## Development setup
 
+### Quality gate (before every PR)
+
+From the repository root:
+
+```bash
+make ci-fast    # backend + frontend (daily loop)
+make ci         # full gate including OSV lockfile scan
+make ci-list    # show jobs and recommended Python/Node matrix
+```
+
+See [docs/CI_LOCAL.md](docs/CI_LOCAL.md) for job details, matrix guidance, and tool requirements (`uv`, Node 20+, optional `osv-scanner`).
+
 ### Backend (Python)
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
-python -m pytest tests/ -q
-ruff check .
-ruff format --check .
+uv sync --all-extras --frozen
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest tests/ -q
 ```
 
 ### Frontend (Node.js)
 
 ```bash
 cd frontend
-npm ci
+npm ci --ignore-scripts
+npm audit --audit-level=moderate
+npm test
 npm run build
 ```
 
@@ -50,9 +62,10 @@ This uses `.env` (seeded from `.env.example`) and `docker compose`.
 
 1. **Focus:** One logical change per PR when practical.
 2. **Tests:** Add or update tests for behavior changes in `backend/tests/`. Run `pytest` before opening the PR.
-3. **Lint:** Backend must pass `ruff check` and `ruff format --check` (see CI).
-4. **Frontend:** `npm run build` must succeed (TypeScript + Vite).
-5. **Documentation:** Update `CHANGELOG.md` under **Unreleased** for user-visible changes. Adjust `docs/` if behavior or configuration changes.
+3. **Quality gate:** Run `make ci-fast` (or `make ci` before release merges). See [docs/CI_LOCAL.md](docs/CI_LOCAL.md).
+4. **Lint:** Backend must pass `ruff check` and `ruff format --check`.
+5. **Frontend:** `npm test` and `npm run build` must succeed (TypeScript + Vite).
+6. **Documentation:** Update `CHANGELOG.md` under **Unreleased** for user-visible changes. Adjust `docs/` if behavior or configuration changes.
 
 ## Commits
 
@@ -64,5 +77,5 @@ Open a [GitHub discussion](https://docs.github.com/en/discussions) if enabled fo
 
 ## Maintainers
 
-- **Protect `main`:** run `./scripts/configure-github-ruleset-main.sh` once (with `gh` + admin rights) so `main` only accepts merges via **pull request** and required CI checks pass. See [docs/maintainers/github-repository-setup.md](docs/maintainers/github-repository-setup.md).
+- **Protect `main`:** run `./scripts/configure-github-ruleset-main.sh` once (with `gh` + admin rights) so `main` only accepts merges via **pull request**. See [docs/maintainers/github-repository-setup.md](docs/maintainers/github-repository-setup.md).
 - **`CODEOWNERS`:** add real `@username` / `@org/team` lines in `.github/CODEOWNERS` before enabling “require code owner review” in GitHub rules.

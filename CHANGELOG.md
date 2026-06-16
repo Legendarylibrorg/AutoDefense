@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Quality gate:** GitHub Actions CI workflows removed; run `make ci` / `make ci-fast` locally ([docs/CI_LOCAL.md](docs/CI_LOCAL.md)). `scripts/precheck.sh` delegates to the local runner.
+
 ### Fixed
 
 - **Supply chain CI:** Pin `google/osv-scanner-action` to `v2.3.8` (reusable PR/full lockfile workflows); upgrade `dependency-review-action` to v5; use `npm ci --ignore-scripts` in audit/install paths.

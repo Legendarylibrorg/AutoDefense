@@ -103,10 +103,4 @@ Optional overrides:
 | `NPM_BIN` | Path to `npm` |
 | `OSV_SCANNER_BIN` | Path to `osv-scanner` |
 
----
-
-## Related automation
-
-- [`.github/dependabot.yml`](../.github/dependabot.yml) — grouped dependency update PRs (pip, npm, GitHub Actions)
-
 See also [CONTRIBUTING.md](../CONTRIBUTING.md) and [SECURITY.md](../SECURITY.md).
